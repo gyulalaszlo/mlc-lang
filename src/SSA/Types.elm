@@ -195,29 +195,3 @@ emptyBlockBase = { body = [], symbols = KeepSymbolScope [] [], entry = InLocal, 
 
 
 
--- SSA Expressions
--- ===============
-
-
-type alias Sym =
-    { name: String
-    , type_: SymbolType
-    }
-
-
-type alias ExpressionScope =
-    { imports: List Symbol
-    , exports: List Symbol
-    }
-
-
-type alias Expression =
-    { parameters: List Symbol
-    , returnType: SymbolType
-
-    , head: LabelName
-    , tails: Set LabelName
-    }
-
-
-
