@@ -8,7 +8,17 @@ import CAsm.SymbolType exposing (BitWidth(..), SymbolType(..), typeToString)
 
 type alias SymbolName = String
 type alias LabelName = String
-type alias FunctionName = String
+
+type PackageName
+    = Builtin String
+    | ExternC
+    | Pkg String
+
+type alias FunctionName =
+    { package: PackageName
+    , name: String
+    }
+
 type alias FunctionArgs = List SymbolName
 
 {-| A symbol is a combination of its name and its type.
@@ -27,6 +37,16 @@ type alias Let =
     , args: FunctionArgs
     }
 
+type alias BranchExit =
+    { condition: SymbolName
+    , true: LabelName
+    , false: LabelName
+    }
+
+type BlkExit
+    = Return SymbolName
+    | JumpNext
+    | Branch BranchExit
 
 {-| A block of instructions.
 |-}
@@ -34,7 +54,7 @@ type alias Blk =
     { name: String
     , phis: List (String, List Let)
     , lets: List Let
-    , return: Maybe SymbolName
+    , exit: BlkExit
     }
 
 
@@ -50,7 +70,8 @@ type alias FunctionSignature =
 
 
 type alias CAsm =
-    { constants: Dict Int String
+    { name: String
+    , constants: Dict Int String
     , parameters: List Sym
     , returnType: SymbolType
     , returnsFrom: List LabelName
@@ -67,14 +88,15 @@ emptyBlk =
     { name = "main"
     , phis  = [ ]
     , lets = []
-    , return = Nothing
+    , exit = JumpNext
     }
 
 {-| Returns a new empty assembly
 |-}
 empty : CAsm
 empty =
-    { constants = Dict.empty
+    { name = "main"
+    , constants = Dict.empty
     , parameters = []
     , returnType = Void
     , returnsFrom = []
@@ -83,93 +105,10 @@ empty =
     , blocks = []
     }
 
--- Helpers for bindings
--- ====================
 
-{-| Adds a new assignment to the head of the block
-|-}
-addHead : (Blk -> Blk) -> CAsm -> CAsm
-addHead mapFn c =
-    let
-        newBlks = case c.blocks of
-            [] -> [ mapFn emptyBlk ]
-            x :: xs -> (mapFn x) :: xs
-    in
-        { c | blocks = newBlks }
-
-
-{-| Adds a new symbol to the symbol table
-|-}
-addSymbol : Sym -> CAsm -> CAsm
-addSymbol sym c =
-    { c | symbols = sym :: c.symbols }
-
-
-call : Sym -> FunctionName -> List Sym -> FunctionSignature
-call assignTo fn args =
-    { name = fn
-    , argTypes = List.map .type_ args
-    , returnType = assignTo.type_
-    }
-
-{-| Adds a new call target to the list of CAsm-s called by this the block
-|-}
-addCall : Sym -> FunctionName -> List Sym -> CAsm -> CAsm
-addCall assignTo fn args c =
-    { c | calls = (call assignTo fn args) :: c.calls }
-
-
-
--- CASM DSL
--- ========
-
-
-{-| Adds a constant definition to the assembly
-|-}
-const : String -> CAsm -> CAsm
-const v c =
-    let
-        append v d = Dict.insert (Dict.size d) v d
-    in
-        { c | constants = append v c.constants }
-
-
-
-{-| Adds a new binding to the current head of the instruction list
-|-}
-let_ : Sym -> (FunctionName, List Sym) -> CAsm -> CAsm
-let_ name (fn,args) c =
-    let
-        l = Let name.name fn <| List.map .name args
-
-    in
-        c
-            |> addSymbol name
-            |> addCall name fn args
-            |> addHead (\b -> { b | lets = l :: b.lets })
-
-{-| Adds a phi-node to the current head of the instruction list
-|-}
-phi : String -> Sym -> (FunctionName, List Sym) -> CAsm -> CAsm
-phi from name (fn,args) c =
-    let
-        l = Let name.name fn <| List.map .name args
-
-    in
-        c
-            |> addSymbol name
-            |> addCall name fn args
-            |> addHead (\b -> { b | phis = (from, [l]) :: b.phis })
-
-
-
-
-block : String -> CAsm -> CAsm
-block n c =
-    let newBlk = { emptyBlk | name = n }
-    in { c | blocks = newBlk :: c.blocks}
-
-
+withNameAndParams : String -> List Sym -> CAsm
+withNameAndParams n args =
+    { empty | name = n, parameters = args }
 
 
 prettyPrint : CAsm -> String
@@ -181,7 +120,7 @@ prettyPrint c =
 
         l0 = line " " ""
         l1 = line "\t" "\t"
-        l2 = line " " "\t\t"
+        l2 = line "\t" "\t\t"
 
 
         block : String -> List String -> List String -> List String
@@ -204,24 +143,43 @@ prettyPrint c =
             l1 <|
                 List.append
                     [ typeToString returnType
-                    , name
+                    , fnName name
                     ]
                     (List.map typeToString argTypes)
 
+        fnName n = n.name
+
         letLine {name, fn, args} =
-            l2 <| List.append [":" ++ name, "=", fn] <| List.map (\a -> ":" ++ a) args
+            l2 <| List.append [":" ++ name, fnName fn] <| List.map (\a -> ":" ++ a) args
 
-        phiLines (from, lets) =
-            "" :: (l1 ["if", toString from]) :: (List.map letLine lets)
+        letLines lets =
+            case lets of
+                [] -> []
+                _ -> l1 ["let"] :: List.map letLine lets
+
+        phiLine (from, lets) =
+            (l1 [toString from]) :: (List.map letLine lets)
+
+        phiLines phis =
+            List.concat <| List.intersperse [""] <| List.map phiLine phis
 
 
-        blk { name, lets, phis } =
-            block "label" [toString name] <|
-                List.concat
-                        [ List.concatMap phiLines phis
-                        , ["", l1 ["let"]]
-                        , List.map letLine lets
-                        ]
+        blkReturn r =
+            case r of
+                Return s -> [ l1 ["return", ":" ++s]]
+                Branch {condition, true, false} -> [ l1 ["branch", ":" ++ condition], l2 [toString true], l2 [toString false]]
+                JumpNext -> []
+
+        blk { name, lets, phis, exit } =
+--            block "label" [toString name] <|
+                List.concat <|
+                    List.intersperse [""] <|
+                        List.filter (\l -> not <| List.isEmpty l) <|
+                            [ ["", l0 ["label", toString name]]
+                            , phiLines phis
+                            , letLines lets
+                            , blkReturn exit
+                            ]
 
 
         s = String.join "\n" <|

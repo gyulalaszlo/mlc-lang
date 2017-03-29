@@ -1,6 +1,7 @@
 module CAsm.SymbolType exposing
     ( SymbolType(..)
     , BitWidth(..)
+    , ParametricType
     , widthInBits
     , typeToString
 
@@ -12,7 +13,16 @@ module CAsm.SymbolType exposing
 {-| Symbol types
 |-}
 
+
+
+type alias TypeParameter = SymbolType
+
+type alias ParametricType =
+    { name: String
+    , args: List TypeParameter
+    }
 {-
+}
     Describes the possible symbol types at low level code.
 -}
 type SymbolType
@@ -21,6 +31,7 @@ type SymbolType
     | Structure String
     | Pointer SymbolType
     | Constant SymbolType
+    | Parametric ParametricType
     | Void
 
 type BitWidth
@@ -29,6 +40,8 @@ type BitWidth
     | Bits16
     | Bits8
     | Bits1
+    | BitsChar
+--    | BitsSizeT
 
 
 widthInBits : BitWidth -> Int
@@ -49,6 +62,8 @@ widthInBits b =
         Bits1 ->
             1
 
+        BitsChar -> 8
+
 signedIntegralTypeToString : BitWidth -> String
 signedIntegralTypeToString w =
     case w of
@@ -68,6 +83,8 @@ signedIntegralTypeToString w =
         Bits64 ->
             "I64"
 
+        BitsChar -> "Char"
+
 
 unsignedIntegralTypeToString : BitWidth -> String
 unsignedIntegralTypeToString w =
@@ -86,6 +103,8 @@ unsignedIntegralTypeToString w =
 
         Bits64 ->
             "U64"
+
+        BitsChar -> "UChar"
 
 {-| Converts a SymbolType to its CAsm reporesentation
 |-}
@@ -107,6 +126,11 @@ typeToString t =
         Pointer p ->
             "Ptr:" ++ typeToString p
 
+        Parametric t ->
+            String.join ":" <|
+                t.name :: List.map typeToString t.args
+
+
         Void ->
             "Void"
 
@@ -127,5 +151,5 @@ i1  =  Signed Bits1
 bool = i1
 
 
-char = u8
-str = Pointer char
+char = Signed BitsChar
+str = Constant <| Pointer char

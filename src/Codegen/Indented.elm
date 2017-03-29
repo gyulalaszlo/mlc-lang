@@ -1,16 +1,41 @@
-module Codegen.Indented exposing (Line(..), applyIndents, concatLine, concatStatement)
+module Codegen.Indented exposing
+    ( Line(..), Token, TextTable
+
+    , applyIndents
+
+    , concatLine, concatStatement
+
+    , line)
+
+import List.Extra
 
 
 type Line
     = Text String
     | Indent
     | Outdent
+    | Empty
+    | Table TextTable
+
+type alias Token =
+    { class: String
+    , text: String
+    }
+
+{-| A list of rows where columns of tokens will be left-aligned
+|-}
+type alias TextTable = List (List Token)
+
 
 
 mapJoin : String -> (a -> String) -> List a -> String
 mapJoin joiner f lst =
     List.map f lst |> String.join joiner
 
+{-| Outputs a single line of text
+|-}
+line : List String -> Line
+line ss = Text <| String.join " " <| ss
 
 
 {-
@@ -35,8 +60,9 @@ type alias AppendLineIndentState =
 applyLineIndent : Line -> AppendLineIndentState -> AppendLineIndentState
 applyLineIndent line state =
     let
+        withIndent s = (String.repeat state.indent "\t") ++ s
         withNewLine s =
-            state.lines ++ [ (String.repeat state.indent "\t") ++ s ]
+            state.lines ++ [ withIndent s ]
     in
         case line of
             Text s ->
@@ -48,7 +74,44 @@ applyLineIndent line state =
             Outdent ->
                 { state | indent = max (state.indent - 1) 0 }
 
+            Empty ->
+                { state | lines = state.lines ++ [""] }
 
+            Table t ->
+                { state | lines = (++) state.lines <| List.map withIndent <| wrapTable "  " t }
+--                { state | lines =  state.lines ++ List.map (\l -> withNewLine <| String.join " " <| List.map .text l) t }
+
+
+{-| The length of a tokens text
+|-}
+tokenLen : Token -> Int
+tokenLen = (String.length << .text)
+
+{-| Make a token a right-padded string
+|-}
+rPadToken : Int -> Token -> String
+rPadToken w s = (++) s.text <|String.repeat (w - tokenLen s) " "
+
+
+applyList : List (a -> b) -> List a -> List b
+applyList fns es =
+    List.map2 (<|) fns es
+
+wrapTable : String -> TextTable -> List String
+wrapTable separator t =
+    let
+        sep = if List.length t == 1 then "" else separator
+        colSize c = Maybe.withDefault 0 <| List.maximum <| List.map tokenLen c
+
+        cols = List.Extra.transpose t |> List.map colSize
+
+        extendCols = List.map rPadToken cols
+        cs = List.map (String.join sep << applyList extendCols) t
+
+
+    in
+        cs
+--    in [toString cols] ++ cs ++ [toString t]
 
 {-
    Applies the indentation guides to the text

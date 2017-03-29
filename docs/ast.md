@@ -141,3 +141,58 @@ label "loop.done"
 
 
 ```
+
+
+```
+
+main:
+    -- lets
+    size_t l = strlen(s);
+    size_t i;
+
+    -- phi-hoists
+    i = 0;
+
+loop_pre:
+    -- lets
+    bool cmp = i < l;
+
+    -- exit
+    if (cmp) {
+        -- done
+        goto loop_iter;
+    }
+    else {
+        -- phi-hoists
+        retval = Maybe_U64_nothing();
+        -- done
+        goto loop_done;
+    }
+
+loop_iter:
+    -- lets
+    char  ch = s[i];
+    size_t next = i + 1;
+    bool isOk = ch == c;
+
+    -- exit
+    if (isOk) {
+        -- phi-hoists
+        retval = Maybe_U64_nothing();
+        -- done
+        goto loop_done;
+    }
+    else {
+        -- phi-hoists
+        i = next;
+        -- done
+        goto loop_pre;
+    }
+
+loop_done:
+    return retval;
+
+
+
+
+```
