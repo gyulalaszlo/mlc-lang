@@ -5,6 +5,7 @@ module CAsm.CAsm exposing (..)
 import Dict exposing (Dict)
 import Html
 import CAsm.SymbolType exposing (BitWidth(..), SymbolType(..), typeToString)
+import List.Extra
 
 type alias SymbolName = String
 type alias LabelName = String
@@ -110,7 +111,22 @@ withNameAndParams : String -> List Sym -> CAsm
 withNameAndParams n args =
     { empty | name = n, parameters = args }
 
+{-| Returns the next node after b if there is any.
+|-}
+nextNodeOf : List Blk -> Blk -> Maybe Blk
+nextNodeOf bs b =
+    List.Extra.findIndex (\bb -> b == bb) bs
+        |> Maybe.andThen (\i -> List.Extra.getAt (i + 1) bs)
 
+{-| Generic helper
+|-}
+findBy : (v -> a) -> a -> List v -> Maybe v
+findBy pred val l =
+    List.Extra.find (\e -> (pred e) == val) l
+
+
+{-| Pretty prints the assembly in its raw form
+|-}
 prettyPrint : CAsm -> String
 prettyPrint c =
     let

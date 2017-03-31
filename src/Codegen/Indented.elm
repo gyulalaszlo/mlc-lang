@@ -79,7 +79,6 @@ applyLineIndent line state =
 
             Table t ->
                 { state | lines = (++) state.lines <| List.map withIndent <| wrapTable "  " t }
---                { state | lines =  state.lines ++ List.map (\l -> withNewLine <| String.join " " <| List.map .text l) t }
 
 
 {-| The length of a tokens text
@@ -100,7 +99,7 @@ applyList fns es =
 wrapTable : String -> TextTable -> List String
 wrapTable separator t =
     let
-        sep = if List.length t == 1 then "" else separator
+        sep = if List.length t == 1 then " " else separator
         colSize c = Maybe.withDefault 0 <| List.maximum <| List.map tokenLen c
 
         cols = List.Extra.transpose t |> List.map colSize

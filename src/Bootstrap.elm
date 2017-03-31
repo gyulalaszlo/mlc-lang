@@ -63,6 +63,9 @@ view model =
         css = Html.node "style" [type_ "text/css"]
                   [text """@import url("bootstrap.css");
 body {  font-family: "Fira Code", Monaco, Courier New; font-size: 13px; }
+
+pre { white-space: pre-wrap; }
+
 table.ssa-table { width: 100%; }
 .kind-unknown-td { color: #999; font-size: 0.8em; }
 
@@ -125,6 +128,8 @@ tbody tr.block-symbols-exported td.op-code { color: #aaa; font-weight:normal;}
 
 
 .node-base-block {  background: #fff; padding: 0.5em 1em; margin: 2em; box-shadow: 1em 1em 1em rgba(0,0,0,0.05); }
+
+
                   """
                   ]
 

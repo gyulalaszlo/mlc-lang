@@ -4,6 +4,7 @@ module CAsm.CPrinter exposing (..)
 
 
 import CAsm.CAsm exposing (..)
+import CAsm.FlowGraph exposing (FlowPath(..), flowGraphFor, loopEdges, loopNodes)
 import CAsm.SymbolType exposing (BitWidth(..), SymbolType(..), typeToString)
 import Codegen.Indented exposing (Line(..), Token, line)
 import Dict
@@ -35,7 +36,9 @@ toCCode c =
     in
         List.concat
             [ [ line header, Text "{", Indent ]
-            , [Text "// Symbols",  Empty]
+            , [ Empty ]
+            , flowPathsAsComment c
+            , [ Empty ]
             , symbolsUsed c
             , [ Empty ]
             , List.concatMap (blockToCode c) <| visibleBlocks c.blocks
@@ -43,15 +46,40 @@ toCCode c =
             ]
 
 
+{-| Converts a single block to C code with labels, indentation and instructions
+|-}
 blockToCode : CAsm -> Blk -> List Line
 blockToCode c b =
-    (Text <| b.name ++ ":") ::
-        List.concat
-            [ [ Indent ]
-            , blockInner c b
-            , [ Outdent, Empty ]
-            ]
+    blockWrapper c b <| blockInner c b
 
+
+{-| Outputs the correct header for a block (label, loop or nothing) and wraps the contents
+potentially in braces
+|-}
+blockWrapper : CAsm -> Blk -> List Line -> List Line
+blockWrapper c b lines =
+    let
+        labelComment l = Text  <| "// " ++ b.name ++ ":"
+        withEmptyHead ls = Empty :: (List.concat ls)
+    in
+        withEmptyHead <|
+            if isBlockALoop c b then
+                [[ Text  <| "// " ++ b.name ++ ":"
+                 , Text <| "while (true) {"
+                 , Indent ]
+                , lines
+                , [Outdent, Text "}"]
+                ]
+            else
+                if hasJumpTo c b.name then
+                    [[ Text <| b.name ++ ":", Indent], lines, [ Outdent]]
+                else
+                    [[Text  <| "// " ++ b.name ++ ":"]
+                    , lines
+                    ]
+
+{-| Shared functionality for the actual instructions in the block sans the label and the indentation.
+|-}
 blockInner : CAsm -> Blk -> List Line
 blockInner c b =
         List.concat
@@ -60,12 +88,8 @@ blockInner c b =
             ]
 
 
-nextNodeOf : List Blk -> Blk -> Maybe Blk
-nextNodeOf bs b =
-    List.Extra.findIndex (\bb -> b == bb) bs
-        |> Maybe.andThen (\i -> List.Extra.getAt (i + 1) bs)
-
-
+{-| Generates the exit part of the block
+|-}
 exit: CAsm -> Blk -> List Line
 exit c b =
     case b.exit of
@@ -85,9 +109,14 @@ branchExit c b e =
             [ hoists s
             , hoistBlocks c s
                 -- Goto if we are unable to inline the target
-                |> Maybe.withDefault [ line ["goto", s, ";"] ]
+                |> Maybe.withDefault (gotoOrContinue c b.name s)
             ]
     in ifThenElse e.condition (goto e.true) (goto e.false)
+
+
+gotoOrContinue : CAsm -> LabelName -> LabelName -> List Line
+gotoOrContinue c from to =
+    if isJumpALoop c from to then [ Text "continue;" ] else [ Text <| "goto " ++ to ++ ";"  ++ toString (from,to)]
 
 
 
@@ -105,7 +134,8 @@ hoistPhiLets c from to =
 
 
 
-
+{-| Returns true if a block can be inlined into its caller.
+|-}
 canHoistBlock : CAsm -> Blk -> Bool
 canHoistBlock c b =
     case (List.length b.phis, b.exit) of
@@ -113,7 +143,8 @@ canHoistBlock c b =
         (_, Return _) -> True
         _ -> False
 
-
+{-| Tries to inline a call to the `to` label
+|-}
 hoistBlocks : CAsm -> LabelName -> Maybe (List Line)
 hoistBlocks c to =
     findBy .name to c.blocks
@@ -124,23 +155,15 @@ hoistBlocks c to =
 |-}
 symbolsUsed : CAsm -> List Line
 symbolsUsed c =
-
     c.symbols
-        |> List.map (\s ->
-            [ typeToken <| typeToCCode s.type_
-            , symbolToken s.name
-            , semiToken
+        |> List.concatMap (\s ->
+            [ Table [[ commentToken <| "// Referenced " ++ toString (symbolUseCount c s.name ) ++ " times" ]]
+            , Table [[ typeToken <| typeToCCode s.type_
+              , symbolToken s.name
+              , semiToken
+              ]]
+            , Empty
             ])
-        |> Table
-        |> List.singleton
---    Table <|
---        List.map (\s ->
---            [ typeToken <| typeToCCode s.type_
---            , symbolToken s.name
---            , semiToken
---            ]) c.symbols
-
-
 
 {-| Wraps outputting a function call as C code.
 
@@ -171,23 +194,113 @@ functionCall f a =
             ExternC -> call <| f.name
             Builtin pkg ->
                 case (f.name, a) of
-                    ("eq", [l,r]) -> binary "==" l r -- l ++ " == " ++ r ++ ";"
-                    ("lt", [l,r]) -> binary "<" l r -- l ++ " < " ++ r ++ ";"
-                    ("gt", [l,r]) -> binary ">" l r -- l ++ " > " ++ r ++ ";"
-                    ("at", [l,r]) -> binary "[]" l r -- r ++ "[" ++ l ++ "];"
+                    ("eq", [l,r]) -> binary "==" l r
+                    ("lt", [l,r]) -> binary "<" l r
+                    ("gt", [l,r]) -> binary ">" l r
+                    ("at", [l,r]) -> binary "[]" l r
 
-                    ("plus", [l,r]) -> binary "+" l r -- l ++ " + " ++ r ++ ";"
+                    ("plus", [l,r]) -> binary "+" l r
+                    ("alias", [r]) -> [ symbolToken r]
+                    ("from-const", [r]) -> [ symbolToken r]
                     _ -> call <| pkg ++ "_" ++ f.name
 
 
+{-
+    FLOW CONTROL
+    ============
 
+-}
 
-
-{-| Generic helper
+{-| Returns true if the block is a block which should be a loop head.
 |-}
-findBy : (v -> a) -> a -> List v -> Maybe v
-findBy pred val l =
-    List.Extra.find (\e -> (pred e) == val) l
+isBlockALoop : CAsm -> Blk -> Bool
+isBlockALoop c b =
+    let
+        (flow,_) = flowGraphFor c
+        loops = loopNodes flow
+    in
+        List.member b.name loops
+
+{-| Returns true if the target of a jump is a loop point
+|-}
+isJumpALoop : CAsm -> LabelName -> LabelName -> Bool
+isJumpALoop c from to =
+    let
+        (flow,_) = flowGraphFor c
+        loops = loopEdges flow
+    in
+        List.member (from,to) loops
+
+{-| Returns true if the block is the target of a jump from a branch
+|-}
+hasJumpTo: CAsm -> LabelName -> Bool
+hasJumpTo c to =
+    let
+        isJumpTo to b =
+            case b.exit of
+                Branch b -> (b.true == to || b.false == to)
+                JumpNext -> False
+                Return _ -> False
+
+    in
+        List.any (isJumpTo to) c.blocks
+
+
+{-| Returns the number of times a symbol is referenced (stands on the right side as argument).
+If only one, then this symbol can be inlined, as its only an rvalue.
+|-}
+symbolUseCount : CAsm -> SymbolName -> Int
+symbolUseCount c n =
+    let
+        useCountFolder : Let -> Int
+        useCountFolder l =
+            if List.member n l.args then 1 else 0
+
+        useCountIn : List Let -> Int
+        useCountIn ls =
+            List.map useCountFolder ls
+                |> List.foldl (+) 0
+
+        -- sums usage in all phis (as they all need to be instantiated at some point)
+        useInPhis phis =
+            List.map (\(_,ls) -> useCountIn ls) phis
+
+        useInExit b =
+            case b.exit of
+                Return sym -> if n == sym then 1 else 0
+                Branch {condition} -> if n == condition then 1 else 0
+                _ -> 0
+
+        sumForBlock b memo =
+            memo
+            + useCountIn b.lets
+            + (List.sum <| useInPhis b.phis)
+            + (useInExit b)
+
+    in
+        List.foldl sumForBlock 0 c.blocks
+
+
+isRValue : CAsm -> SymbolName -> Bool
+isRValue c n =
+    symbolUseCount c n == 0
+
+
+{-| Returns the flow paths through a function as comments in the C code
+|-}
+flowPathsAsComment : CAsm -> List Line
+flowPathsAsComment c =
+    let
+        (flow, _) = flowGraphFor c
+        path p = String.join " -> " p
+        flowLine f =
+            case f of
+                EndsWithReturn p ->
+                    Text <| "// RETURN: " ++ (path p)
+                EndsWithLoop b n a ->
+                    Text <| "// LOOP: " ++ (path b) ++ " -> (" ++ n ++ " -> " ++ (path a) ++ " -> ...)"
+    in
+        List.map flowLine flow
 
 {-
     GENERIC STUFF
@@ -202,6 +315,7 @@ semiToken = Token "semicolon" ";"
 colonToken = Token "colon" ","
 assignToken = Token "assign" "="
 opToken = Token "op"
+commentToken = Token "comment"
 
 {-| Outputs a list of let expressions.
 |-}
@@ -209,12 +323,6 @@ lets : List Let -> List Line
 lets ls =
     let aLet l = [ symbolToken l.name, assignToken ] ++  functionCall l.fn l.args
     in List.singleton <| Table <| List.map aLet ls
-
---{-| Outputs a single let expression
---|-}
---singleLet : Let -> List Line
---singleLet l =
---        [ line [ l.name,  "=", functionCall l.fn l.args ] ]
 
 
 {-| Models an if-then-else C block.
