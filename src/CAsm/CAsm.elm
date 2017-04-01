@@ -27,7 +27,14 @@ type alias FunctionArgs = List SymbolName
 type alias Sym =
     { name: SymbolName
     , type_: SymbolType
+    , valueKind: SymbolValueKind
     }
+
+{-| Determines if a value can be inlined or not
+|-}
+type SymbolValueKind
+    = RValue
+    | LValue
 
 {-| Describes the value an entry is assigned to.
 
@@ -38,6 +45,8 @@ type alias Let =
     , args: FunctionArgs
     }
 
+{-| Data for branch exits from blocks: condition symbol name and both branch labels
+|-}
 type alias BranchExit =
     { condition: SymbolName
     , true: LabelName
@@ -123,6 +132,32 @@ nextNodeOf bs b =
 findBy : (v -> a) -> a -> List v -> Maybe v
 findBy pred val l =
     List.Extra.find (\e -> (pred e) == val) l
+
+{-| Tries to find a symbol by name in the symbol table
+|-}
+findSymbol : SymbolName -> CAsm -> Maybe Sym
+findSymbol n c = findBy .name n c.symbols
+
+{-| If the symbol has a definition in the lets of the block, then return Just the definition Let,
+otherwise returns Nothing
+|-}
+findSymbolDefinition : SymbolName -> LabelName -> CAsm -> List Let
+findSymbolDefinition n l c =
+    let
+        fromLets b = List.filter (\l -> l.name == n) b
+        fromPhis b =
+            List.filter (\(name,_) -> name == l) b
+--              b
+                |> (Debug.log <| "fromPhis:" ++ l)
+                |> List.concatMap (\(_,phis) -> fromLets phis)
+    in
+        List.concatMap (\b -> List.concat [fromLets b.lets, fromPhis b.phis]) c.blocks
+
+{-| Tries to find a block by name in the blocks list
+|-}
+findBlock : LabelName -> CAsm -> Maybe Blk
+findBlock n c = findBy .name n c.blocks
+
 
 
 {-| Pretty prints the assembly in its raw form

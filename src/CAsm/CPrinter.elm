@@ -50,7 +50,7 @@ toCCode c =
 |-}
 blockToCode : CAsm -> Blk -> List Line
 blockToCode c b =
-    blockWrapper c b <| blockInner c b
+    blockWrapper c b <| blockInner c "" b
 
 
 {-| Outputs the correct header for a block (label, loop or nothing) and wraps the contents
@@ -64,7 +64,7 @@ blockWrapper c b lines =
     in
         withEmptyHead <|
             if isBlockALoop c b then
-                [[ Text  <| "// " ++ b.name ++ ":"
+                [[ labelComment b.name
                  , Text <| "while (true) {"
                  , Indent ]
                 , lines
@@ -74,26 +74,26 @@ blockWrapper c b lines =
                 if hasJumpTo c b.name then
                     [[ Text <| b.name ++ ":", Indent], lines, [ Outdent]]
                 else
-                    [[Text  <| "// " ++ b.name ++ ":"]
+                    [ [labelComment b.name]
                     , lines
                     ]
 
 {-| Shared functionality for the actual instructions in the block sans the label and the indentation.
 |-}
-blockInner : CAsm -> Blk -> List Line
-blockInner c b =
+blockInner : CAsm -> LabelName -> Blk -> List Line
+blockInner c from b =
         List.concat
-            [ lets b.lets
-            , exit c b
+            [ lets c from <| List.filter (\l -> valueKind c l.name == LValue) b.lets
+            , exit c from b
             ]
 
 
 {-| Generates the exit part of the block
 |-}
-exit: CAsm -> Blk -> List Line
-exit c b =
+exit: CAsm -> LabelName -> Blk -> List Line
+exit c from b =
     case b.exit of
-        Return s -> [ Text <| "return " ++ s ++ ";" ]
+        Return s -> [ Table <| [[ keywordToken "return " ] ++ inlineArgs c from s  ++ [ semiToken ] ]]
         Branch e -> branchExit c b e
         JumpNext -> nextNodeOf c.blocks b
                 |> Maybe.map (\next -> hoistPhiLets c b.name next.name)
@@ -107,11 +107,11 @@ branchExit c b e =
         hoists s = hoistPhiLets c b.name s
         goto s = List.concat
             [ hoists s
-            , hoistBlocks c s
+            , hoistBlocks c b.name s
                 -- Goto if we are unable to inline the target
                 |> Maybe.withDefault (gotoOrContinue c b.name s)
             ]
-    in ifThenElse e.condition (goto e.true) (goto e.false)
+    in ifThenElse (inlineArgs c b.name e.condition) (goto e.true) (goto e.false)
 
 
 gotoOrContinue : CAsm -> LabelName -> LabelName -> List Line
@@ -126,7 +126,7 @@ hoistPhiLets : CAsm -> LabelName -> LabelName -> List Line
 hoistPhiLets c from to =
     findBy .name to c.blocks
         |> Maybe.andThen (\b -> findBy Tuple.first from b.phis)
-        |> Maybe.map  (lets << Tuple.second) --(\(_,phis) -> lets phis)
+        |> Maybe.map (\(_,phis) -> lets c from (List.filter (\p -> isLValue c p.name) phis))
         |> Maybe.withDefault []
 
 
@@ -145,48 +145,59 @@ canHoistBlock c b =
 
 {-| Tries to inline a call to the `to` label
 |-}
-hoistBlocks : CAsm -> LabelName -> Maybe (List Line)
-hoistBlocks c to =
+hoistBlocks : CAsm -> LabelName -> LabelName -> Maybe (List Line)
+hoistBlocks c from to =
     findBy .name to c.blocks
         |> Maybe.andThen (\b -> if canHoistBlock c b then Just b else Nothing)
-        |> Maybe.map (\b -> blockInner c b)
+        |> Maybe.map (\b -> blockInner c from  b)
 
 {-| Emits C code for declaring all symbols that will be used
 |-}
 symbolsUsed : CAsm -> List Line
 symbolsUsed c =
-    c.symbols
-        |> List.concatMap (\s ->
-            [ Table [[ commentToken <| "// Referenced " ++ toString (symbolUseCount c s.name ) ++ " times" ]]
-            , Table [[ typeToken <| typeToCCode s.type_
-              , symbolToken s.name
-              , semiToken
-              ]]
-            , Empty
-            ])
+    let
+        refCount s = "Refs: " ++ toString (symbolUseCount c s.name)
+        rval s = toString (valueKind c s.name)
+    in
+        c.symbols
+            |> List.map (\s ->
+                [ typeToken <| typeToCCode s.type_
+                , symbolToken s.name
+                , semiToken
+                , commentToken <| "//"
+                , commentToken <| refCount s
+                , commentToken <| rval s
+                ])
+            |> Table
+            |> List.singleton
 
 {-| Wraps outputting a function call as C code.
 
 Handles builtins and C code.
 
 |-}
-functionCall : FunctionName -> FunctionArgs -> List Token
-functionCall f a =
+functionCall : CAsm -> LabelName -> FunctionName -> FunctionArgs -> List Token
+functionCall c label f a =
     let
         call n =
             List.concat
                 [   [ functionNameToken n
                     , parenToken "("
                     ]
-                ,   (List.intersperse colonToken <| List.map symbolToken a)
-                ,   [ parenToken ")", semiToken ]
+--                , inlineArgs c a
+                ,   (List.concat <| List.intersperse [ colonToken ] <| List.map (inlineArgs c label) a)
+                ,   [ parenToken ")" ]
                 ]
         binary o l r =
-               [ symbolToken l
-                , opToken o
-                , symbolToken r
-                , semiToken
+            List.concat
+                [ inlineArgs c label l
+                , [ opToken o]
+                , inlineArgs c label r
                 ]
+--               [ symbolToken l
+--                , opToken o
+--                , symbolToken r
+--                ]
 
     in
         case f.package of
@@ -197,10 +208,16 @@ functionCall f a =
                     ("eq", [l,r]) -> binary "==" l r
                     ("lt", [l,r]) -> binary "<" l r
                     ("gt", [l,r]) -> binary ">" l r
-                    ("at", [l,r]) -> binary "[]" l r
+                    ("at", [l,r]) ->
+                        List.concat
+                            [ inlineArgs c label l
+                            , [parenToken "["]
+                            , inlineArgs c label r
+                            , [parenToken "]"]
+                            ]
 
                     ("plus", [l,r]) -> binary "+" l r
-                    ("alias", [r]) -> [ symbolToken r]
+                    ("alias", [r]) -> inlineArgs c label r
                     ("from-const", [r]) -> [ symbolToken r]
                     _ -> call <| pkg ++ "_" ++ f.name
 
@@ -281,9 +298,17 @@ symbolUseCount c n =
         List.foldl sumForBlock 0 c.blocks
 
 
+valueKind : CAsm -> SymbolName -> SymbolValueKind
+valueKind c n =
+    findBy .name n c.symbols
+        |> Maybe.map .valueKind
+        |> Maybe.withDefault LValue
+
+isLValue : CAsm -> SymbolName -> Bool
+isLValue c n = valueKind c n == LValue
+
 isRValue : CAsm -> SymbolName -> Bool
-isRValue c n =
-    symbolUseCount c n == 0
+isRValue c n = valueKind c n == RValue
 
 
 {-| Returns the flow paths through a function as comments in the C code
@@ -316,21 +341,52 @@ colonToken = Token "colon" ","
 assignToken = Token "assign" "="
 opToken = Token "op"
 commentToken = Token "comment"
+keywordToken = Token "keyword"
 
 {-| Outputs a list of let expressions.
 |-}
-lets : List Let -> List Line
-lets ls =
-    let aLet l = [ symbolToken l.name, assignToken ] ++  functionCall l.fn l.args
-    in List.singleton <| Table <| List.map aLet ls
+lets : CAsm -> LabelName -> List Let -> List Line
+lets c ln ls =
+    let
+        aLet l =
+            case valueKind c l.name of
+                LValue -> letLValue c ln l
+                RValue -> letRValue c ln l
+    in
+        List.singleton <| Table <| List.map aLet ls
+
+
+letLValue : CAsm -> LabelName -> Let -> List Token
+letLValue c ln l =
+    List.concat
+        [ [ symbolToken l.name, assignToken ]
+        , functionCall c ln l.fn l.args
+        ]
+
+letRValue : CAsm -> LabelName -> Let -> List Token
+letRValue c ln l =
+    [  symbolToken l.name, assignToken ] ++ functionCall c ln l.fn l.args
+
+
+{-| Tries to inline the arguments for a function call recursively until it hits an lvalue
+|-}
+inlineArgs : CAsm -> LabelName -> SymbolName -> List Token
+inlineArgs c l n =
+    case valueKind c n of
+        LValue -> [symbolToken n]
+        RValue ->
+            findSymbolDefinition n l c
+                |> List.concatMap (\{fn, args} -> functionCall c l fn args )
+
+
 
 
 {-| Models an if-then-else C block.
 |-}
-ifThenElse : String -> List Line -> List Line -> List Line
+ifThenElse : List Token -> List Line -> List Line -> List Line
 ifThenElse cond t f =
     List.concat
-        [ [ line ["if", "(", cond, ")", "{"] , Indent ]
+        [ [ Table [[ keywordToken "if", parenToken "("] ++ cond ++[parenToken ")", parenToken "{"]] , Indent ]
         , t
         , [ Outdent , line ["}", "else", "{"], Indent ]
         , f

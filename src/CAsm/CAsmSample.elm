@@ -11,19 +11,19 @@ import Html
 
 sample =
     let
-        i = Sym "i" u64
-        next = Sym "next" u64
-        l = Sym "l" u64
-        s = Sym "s" str
-        ch = Sym "ch" char
-        current = Sym "current" char
-        match = Sym "match" char
+        i = Sym "i" u64 LValue
+        next = Sym "next" u64 RValue
+        l = Sym "l" u64 LValue
+        s = Sym "s" str LValue
+        ch = Sym "ch" char LValue
+        current = Sym "current" char RValue
+        match = Sym "match" char RValue
 
-        c0 = Sym "__0" u64
-        c1 = Sym "__1" u64
-        cmp = Sym "cmp" bool
+        c0 = Sym "__0" u64 RValue
+        c1 = Sym "__1" u64 RValue
+        cmp = Sym "cmp" bool RValue
 
-        retval = Sym "retval" <| Parametric <| ParametricType "Maybe" [u64]
+        retval = Sym "retval" (Parametric <| ParametricType "Maybe" [u64])  RValue
     in
         const "0" <|
         const "1" <|

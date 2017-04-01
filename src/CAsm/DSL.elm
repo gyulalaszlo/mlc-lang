@@ -25,8 +25,8 @@ addHead mapFn c =
 
 {-| Adds a new symbol to the symbol table
 |-}
-addSymbol : Sym -> CAsm -> CAsm
-addSymbol sym c =
+addSymbol : Sym -> SymbolValueKind -> CAsm -> CAsm
+addSymbol sym k c =
     if List.any (\s -> s.name == sym.name) c.symbols then c
     else { c | symbols = sym :: c.symbols }
 
@@ -59,6 +59,18 @@ const v c =
     in
         { c | constants = append v c.constants }
 
+{-| Adds a new rvalue binding to the current head of the instruction list
+|-}
+tmp : Sym -> (FunctionName, List Sym) -> CAsm -> CAsm
+tmp name (fn,args) c =
+    let
+        l = Let name.name fn <| List.map .name args
+
+    in
+        c
+            |> addSymbol name RValue
+            |> addCall name fn args
+            |> addHead (\b -> { b | lets = l :: b.lets })
 
 
 {-| Adds a new binding to the current head of the instruction list
@@ -70,7 +82,7 @@ let_ name (fn,args) c =
 
     in
         c
-            |> addSymbol name
+            |> addSymbol name LValue
             |> addCall name fn args
             |> addHead (\b -> { b | lets = l :: b.lets })
 
@@ -83,7 +95,7 @@ phi from name (fn,args) c =
 
     in
         c
-            |> addSymbol name
+            |> addSymbol name LValue
             |> addCall name fn args
             |> addHead (\b -> { b | phis = (from, [l]) :: b.phis })
 
