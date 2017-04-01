@@ -122,3 +122,45 @@ loopEdges ps =
                 _ -> Nothing
     in
         List.filterMap loopNode ps
+
+
+
+{-
+    FLOW CONTROL
+    ============
+
+-}
+
+{-| Returns true if the block is a block which should be a loop head.
+|-}
+isBlockALoop : CAsm -> Blk -> Bool
+isBlockALoop c b =
+    let
+        (flow,_) = flowGraphFor c
+        loops = loopNodes flow
+    in
+        List.member b.name loops
+
+{-| Returns true if the target of a jump is a loop point
+|-}
+isJumpALoop : CAsm -> LabelName -> LabelName -> Bool
+isJumpALoop c from to =
+    let
+        (flow,_) = flowGraphFor c
+        loops = loopEdges flow
+    in
+        List.member (from,to) loops
+
+{-| Returns true if the block is the target of a jump from a branch
+|-}
+hasJumpTo: CAsm -> LabelName -> Bool
+hasJumpTo c to =
+    let
+        isJumpTo to b =
+            case b.exit of
+                Branch b -> (b.true == to || b.false == to)
+                JumpNext -> False
+                Return _ -> False
+
+    in
+        List.any (isJumpTo to) c.blocks

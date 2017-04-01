@@ -4,7 +4,7 @@ module CAsm.CPrinter exposing (..)
 
 
 import CAsm.CAsm exposing (..)
-import CAsm.FlowGraph exposing (FlowPath(..), flowGraphFor, loopEdges, loopNodes)
+import CAsm.FlowGraph exposing (FlowPath(..), flowGraphFor, hasJumpTo, isBlockALoop, isJumpALoop, loopEdges, loopNodes)
 import CAsm.SymbolType exposing (BitWidth(..), SymbolType(..), typeToString)
 import Codegen.Indented exposing (Line(..), Token, line)
 import Dict
@@ -59,32 +59,73 @@ potentially in braces
 blockWrapper : CAsm -> Blk -> List Line -> List Line
 blockWrapper c b lines =
     let
-        labelComment l = Text  <| "// " ++ b.name ++ ":"
         withEmptyHead ls = Empty :: (List.concat ls)
     in
         withEmptyHead <|
             if isBlockALoop c b then
-                [[ labelComment b.name
-                 , Text <| "while (true) {"
-                 , Indent ]
+                [[ -- labelComment b.name
+--                 , loopHead c b
+--                 , Text <| "while (true) {"
+                 --, Indent
+                 ]
                 , lines
-                , [Outdent, Text "}"]
+--                , [Outdent, Text "}"]
                 ]
             else
                 if hasJumpTo c b.name then
                     [[ Text <| b.name ++ ":", Indent], lines, [ Outdent]]
                 else
-                    [ [labelComment b.name]
-                    , lines
+                    [ --[labelComment b.name]
+                    -- ,
+                    lines
                     ]
+
+labelComment : LabelName -> Line
+labelComment l = Text  <| "// " ++ l ++ ":"
+
+loopHead : CAsm -> LabelName -> Blk -> List Line
+loopHead c from b =
+    let
+        while cond =
+            Table <|
+                [[keywordToken "while", parenToken "("] ++ cond ++ [ parenToken ")", parenToken "{"]]
+
+
+    in
+        case b.exit of
+            Branch {condition, true, false} ->
+                List.concat <|
+                    [ [ (while <| inlineArgs c from condition), Indent]
+                    , hoisted c b.name true
+                    , [ Outdent, Text "}" ]
+                    , hoisted c b.name false
+                    ]
+            _ -> [ while [ keywordToken "true" ] ]
+
+
+blockInnerWrapper : CAsm -> LabelName -> Blk -> List Line -> List Line
+blockInnerWrapper c l b inner =
+    let
+        isLoop = isBlockALoop c b
+
+    in
+        if isLoop then List.append (loopHead c l b) inner
+        else List.append inner (exit c l b)
+--        case b.exit of
+--            Branch {condition} -> while <| inlineArgs c from condition
+--            _ -> while [ keywordToken "true" ]
+
 
 {-| Shared functionality for the actual instructions in the block sans the label and the indentation.
 |-}
 blockInner : CAsm -> LabelName -> Blk -> List Line
 blockInner c from b =
-        List.concat
-            [ lets c from <| List.filter (\l -> valueKind c l.name == LValue) b.lets
-            , exit c from b
+    blockInnerWrapper c from b <|
+        List.concat <|
+            [ --[ labelComment b.name ]
+            --,
+            lets c from <| List.filter (\l -> valueKind c l.name == LValue) b.lets
+--            , exit c from b
             ]
 
 
@@ -104,14 +145,30 @@ exit c from b =
 branchExit : CAsm -> Blk -> BranchExit -> List Line
 branchExit c b e =
     let
-        hoists s = hoistPhiLets c b.name s
-        goto s = List.concat
-            [ hoists s
-            , hoistBlocks c b.name s
-                -- Goto if we are unable to inline the target
-                |> Maybe.withDefault (gotoOrContinue c b.name s)
-            ]
+        goto = hoisted c b.name
+--        hoists s = hoistPhiLets c b.name s
+--        goto s = List.concat
+--            [ hoists s
+--            , hoistBlocks c b.name s
+--                -- Goto if we are unable to inline the target
+--                |> Maybe.withDefault (gotoOrContinue c b.name s)
+--            ]
     in ifThenElse (inlineArgs c b.name e.condition) (goto e.true) (goto e.false)
+
+
+hoisted : CAsm -> LabelName -> LabelName -> List Line
+hoisted c from to =
+    let
+        hoists to = hoistPhiLets c from to
+        goto to = List.concat
+            [ hoists to
+            , hoistBlocks c from to
+                -- Goto if we are unable to inline the target
+                |> Maybe.withDefault (gotoOrContinue c from to)
+            ]
+    in
+        goto to --ifThenElse (inlineArgs c b.name e.condition) (goto e.true) (goto e.false)
+
 
 
 gotoOrContinue : CAsm -> LabelName -> LabelName -> List Line
@@ -160,6 +217,7 @@ symbolsUsed c =
         rval s = toString (valueKind c s.name)
     in
         c.symbols
+            |> List.filter (\{valueKind} -> valueKind == LValue)
             |> List.map (\s ->
                 [ typeToken <| typeToCCode s.type_
                 , symbolToken s.name
@@ -222,45 +280,15 @@ functionCall c label f a =
                     _ -> call <| pkg ++ "_" ++ f.name
 
 
-{-
-    FLOW CONTROL
-    ============
 
--}
-
-{-| Returns true if the block is a block which should be a loop head.
-|-}
-isBlockALoop : CAsm -> Blk -> Bool
-isBlockALoop c b =
-    let
-        (flow,_) = flowGraphFor c
-        loops = loopNodes flow
-    in
-        List.member b.name loops
-
-{-| Returns true if the target of a jump is a loop point
-|-}
-isJumpALoop : CAsm -> LabelName -> LabelName -> Bool
-isJumpALoop c from to =
-    let
-        (flow,_) = flowGraphFor c
-        loops = loopEdges flow
-    in
-        List.member (from,to) loops
-
-{-| Returns true if the block is the target of a jump from a branch
-|-}
-hasJumpTo: CAsm -> LabelName -> Bool
-hasJumpTo c to =
-    let
-        isJumpTo to b =
-            case b.exit of
-                Branch b -> (b.true == to || b.false == to)
-                JumpNext -> False
-                Return _ -> False
-
-    in
-        List.any (isJumpTo to) c.blocks
+isAConditionalLoop : CAsm -> Blk -> Bool
+isAConditionalLoop c b =
+    case b.exit of
+        Branch _ ->
+            if List.isEmpty <| List.filter (\l -> isLValue c l.name) b.lets
+                then True
+                else False
+        _ -> False
 
 
 {-| Returns the number of times a symbol is referenced (stands on the right side as argument).
