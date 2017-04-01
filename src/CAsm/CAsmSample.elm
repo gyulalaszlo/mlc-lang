@@ -2,7 +2,10 @@ module CAsm.CAsmSample exposing (..)
 {-| Sample for generating a simple expression block
 |-}
 
+import CAsm.AstBuilder exposing (toAst)
+import CAsm.AstPrinter exposing (astToString)
 import CAsm.CAsm exposing (..)
+import CAsm.Error exposing (errorToString)
 import CAsm.SymbolType exposing (..)
 import CAsm.DSL exposing (..)
 import CAsm.CPrinter exposing (toCCode)
@@ -25,9 +28,8 @@ sample =
 
         retval = Sym "retval" (Parametric <| ParametricType "Maybe" [u64])  RValue
     in
-        const "0" <|
         const "1" <|
-        const "hello"
+        const "0"
 
         <| block "main"
             [ let_ l (cFn "strlen", [s])
@@ -43,6 +45,7 @@ sample =
         <| block "loop.iter"
             [ let_ current (builtin "U8" "at", [s, i])
             , let_ match (builtin "U8" "eq", [current, ch])
+            , let_ c1 (builtin "U64" "from-const", [c1])
             , let_ next (builtin "U8" "plus", [i, c1])
             , branch match.name "loop.done" "loop.pre"
             ]
@@ -57,9 +60,23 @@ sample =
         <| withNameAndParams "indexOfStr" [ch, s]
 
 
+astView s =
+    case toAst s of
+        Ok ast -> Html.code []
+                [ Html.pre [] [ Html.text <| astToString ast]
+                , Html.hr [] []
+                , Html.text <| toString ast
+                ]
+        Err errors -> Html.pre [] [ Html.text <| errorToString errors]
+
+
 main =
     Html.div []
-        [ Html.pre [] [ Html.text <| String.join "\n" <| applyIndents <| toCCode sample ]
+        [ astView sample
+        , Html.hr [] []
+--        , Html.code [] [ Html.text <| toString <| toAst sample ]
+        , Html.hr [] []
+        , Html.pre [] [ Html.text <| String.join "\n" <| applyIndents <| toCCode sample ]
         , Html.hr [] []
         , Html.pre [] [ Html.text <| prettyPrint sample ]
         , Html.hr [] []

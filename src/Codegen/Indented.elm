@@ -1,7 +1,7 @@
 module Codegen.Indented exposing
     ( Line(..), Token, TextTable
 
-    , applyIndents
+    , applyIndents, indentWith
 
     , concatLine, concatStatement
 
@@ -57,10 +57,10 @@ type alias AppendLineIndentState =
     { indent : Int, lines : List String }
 
 
-applyLineIndent : Line -> AppendLineIndentState -> AppendLineIndentState
-applyLineIndent line state =
+applyLineIndent : String -> Line -> AppendLineIndentState -> AppendLineIndentState
+applyLineIndent indentStr line state =
     let
-        withIndent s = (String.repeat state.indent "\t") ++ s
+        withIndent s = (String.repeat state.indent indentStr) ++ s
         withNewLine s =
             state.lines ++ [ withIndent s ]
     in
@@ -124,6 +124,19 @@ applyIndents lines =
             { lines = [], indent = 0 }
 
         indentedLines =
-            List.foldl applyLineIndent init lines
+            List.foldl (applyLineIndent "\t") init lines
     in
         indentedLines.lines
+
+{-| Applies the given indentation string and concatenates the results
+-}
+indentWith : String -> List Line -> String
+indentWith indentStr lines =
+    let
+        init =
+            { lines = [], indent = 0 }
+
+        indentedLines =
+            List.foldl (applyLineIndent indentStr) init lines
+    in
+        indentedLines.lines |> String.join "\n"

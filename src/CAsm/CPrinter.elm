@@ -5,7 +5,7 @@ module CAsm.CPrinter exposing (..)
 
 import CAsm.CAsm exposing (..)
 import CAsm.FlowGraph exposing (FlowPath(..), flowGraphFor, hasJumpTo, isBlockALoop, isJumpALoop, loopEdges, loopNodes)
-import CAsm.SymbolType exposing (BitWidth(..), SymbolType(..), typeToString)
+import CAsm.SymbolType exposing (BitWidth(..), SymbolType(..), typeToString, typeToCCode)
 import Codegen.Indented exposing (Line(..), Token, line)
 import Dict
 import List.Extra
@@ -63,22 +63,12 @@ blockWrapper c b lines =
     in
         withEmptyHead <|
             if isBlockALoop c b then
-                [[ -- labelComment b.name
---                 , loopHead c b
---                 , Text <| "while (true) {"
-                 --, Indent
-                 ]
-                , lines
---                , [Outdent, Text "}"]
-                ]
+                [ lines ]
             else
                 if hasJumpTo c b.name then
                     [[ Text <| b.name ++ ":", Indent], lines, [ Outdent]]
                 else
-                    [ --[labelComment b.name]
-                    -- ,
-                    lines
-                    ]
+                    [ lines ]
 
 labelComment : LabelName -> Line
 labelComment l = Text  <| "// " ++ l ++ ":"
@@ -146,13 +136,6 @@ branchExit : CAsm -> Blk -> BranchExit -> List Line
 branchExit c b e =
     let
         goto = hoisted c b.name
---        hoists s = hoistPhiLets c b.name s
---        goto s = List.concat
---            [ hoists s
---            , hoistBlocks c b.name s
---                -- Goto if we are unable to inline the target
---                |> Maybe.withDefault (gotoOrContinue c b.name s)
---            ]
     in ifThenElse (inlineArgs c b.name e.condition) (goto e.true) (goto e.false)
 
 
@@ -404,7 +387,9 @@ inlineArgs c l n =
         LValue -> [symbolToken n]
         RValue ->
             findSymbolDefinition n l c
-                |> List.concatMap (\{fn, args} -> functionCall c l fn args )
+                |> Result.map (\{fn, args} -> functionCall c l fn args )
+                |> Result.withDefault []
+--                |> List.concatMap (\{fn, args} -> functionCall c l fn args )
 
 
 
@@ -432,77 +417,3 @@ paren s =
     List.concat [ ["("], s, [")"] ]
 
 
-{-
-    TYPES
-    =====
--}
-
-
-signedIntegralTypeToString : BitWidth -> String
-signedIntegralTypeToString w =
-    case w of
-
-        Bits1 ->
-            "boolean"
-
-        Bits8 ->
-            "int8_t"
-
-        Bits16 ->
-            "int16_t"
-
-        Bits32 ->
-            "int32_t"
-
-        Bits64 ->
-            "int64_t"
-        BitsChar -> "char"
-
-
-unsignedIntegralTypeToString : BitWidth -> String
-unsignedIntegralTypeToString w =
-    case w of
-
-        Bits1 ->
-            "boolean"
-
-        Bits8 ->
-            "uint8_t"
-
-        Bits16 ->
-            "uint16_t"
-
-        Bits32 ->
-            "uint32_t"
-
-        Bits64 ->
-            "uint64_t"
-
-        BitsChar -> "unsigned char"
-
-
-{-| Returns the C type name for a CAsm type
-|-}
-typeToCCode : SymbolType -> String
-typeToCCode t =
-    case t of
-        Signed w ->
-            signedIntegralTypeToString w
-
-        Unsigned w ->
-            unsignedIntegralTypeToString w
-
-        Structure s ->
-            "struct " ++ s
-
-        Constant c ->
-            "const " ++ typeToCCode c
-
-        Pointer p ->
-            typeToCCode p ++ "*"
-
-        Void ->
-            "void"
-
-        Parametric t ->
-           String.join "_" <| (::) t.name <| List.map typeToCCode t.args

@@ -2,6 +2,7 @@ module CAsm.CAsm exposing (..)
 {-| Assembly parser and exporter
 |-}
 
+import CAsm.Error as Error exposing (Error)
 import Dict exposing (Dict)
 import Html
 import CAsm.SymbolType exposing (BitWidth(..), SymbolType(..), typeToString)
@@ -133,31 +134,67 @@ findBy : (v -> a) -> a -> List v -> Maybe v
 findBy pred val l =
     List.Extra.find (\e -> (pred e) == val) l
 
+
 {-| Tries to find a symbol by name in the symbol table
 |-}
-findSymbol : SymbolName -> CAsm -> Maybe Sym
-findSymbol n c = findBy .name n c.symbols
+findSymbol : SymbolName -> CAsm -> Result Error Sym
+findSymbol n c =
+    let toResult = Result.fromMaybe (Error.make <| "Cannot find symbol:" ++ toString n)
+    in case findBy .name n c.symbols of
+        Nothing -> findBy .name n c.parameters |> toResult
+        Just s -> Ok s
+
+
 
 {-| If the symbol has a definition in the lets of the block, then return Just the definition Let,
 otherwise returns Nothing
 |-}
-findSymbolDefinition : SymbolName -> LabelName -> CAsm -> List Let
+findSymbolDefinition : SymbolName -> LabelName -> CAsm -> Result Error Let
 findSymbolDefinition n l c =
     let
-        fromLets b = List.filter (\l -> l.name == n) b
+        fromLets b =
+            List.filter (\l -> l.name == n) b
+
         fromPhis b =
             List.filter (\(name,_) -> name == l) b
---              b
-                |> (Debug.log <| "fromPhis:" ++ l)
                 |> List.concatMap (\(_,phis) -> fromLets phis)
+        found =
+            List.concatMap (\b -> List.concat [fromLets b.lets, fromPhis b.phis]) c.blocks
+
+        err msg =
+            Err <| Error.make <| msg ++ " for:" ++ toString n ++ " when coming from " ++ toString l
     in
-        List.concatMap (\b -> List.concat [fromLets b.lets, fromPhis b.phis]) c.blocks
+        case found of
+            [] -> err "Cannot find symbol definition"
+            x :: _ :: _ -> err "Too many symbol definitions "
+            [x] -> Ok x
+
 
 {-| Tries to find a block by name in the blocks list
 |-}
-findBlock : LabelName -> CAsm -> Maybe Blk
-findBlock n c = findBy .name n c.blocks
+findBlock : LabelName -> CAsm -> Result Error Blk
+findBlock n c =
+    findBy .name n c.blocks
+        |> Result.fromMaybe (Error.make <| "Cannot find block:" ++ toString n)
 
+{-| Tries to find a constant by name in the blocks list
+|-}
+findConstant : SymbolName -> CAsm -> Result Error (Int,String)
+findConstant n c =
+    findBy (\(i,_) -> "__" ++ toString i) n (Dict.toList c.constants)
+        |> Result.fromMaybe (Error.make <| "Cannot find constant:" ++ toString n)
+
+valueKind : CAsm -> SymbolName -> SymbolValueKind
+valueKind c n =
+    findBy .name n c.symbols
+        |> Maybe.map .valueKind
+        |> Maybe.withDefault LValue
+
+isLValue : CAsm -> SymbolName -> Bool
+isLValue c n = valueKind c n == LValue
+
+isRValue : CAsm -> SymbolName -> Bool
+isRValue c n = valueKind c n == RValue
 
 
 {-| Pretty prints the assembly in its raw form

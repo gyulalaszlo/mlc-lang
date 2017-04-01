@@ -4,14 +4,19 @@ module CAsm.SymbolType exposing
     , ParametricType
     , widthInBits
     , typeToString
+    , typeToCCode
 
     , u64, u32, u16, u8, u1
     , i64, i32, i16, i8, i1
     , char, str
     , bool
+
+    , unwrapPointer
     )
 {-| Symbol types
 |-}
+
+import CAsm.Error as Error exposing (Error)
 
 
 
@@ -153,3 +158,88 @@ bool = i1
 
 char = Signed BitsChar
 str = Constant <| Pointer char
+
+
+{-| Returns `Just` the pointed to types for the inner types
+-}
+unwrapPointer : SymbolType -> Result Error SymbolType
+unwrapPointer t =
+    case t of
+        Pointer inner -> Ok inner
+        Constant (Pointer inner) -> Ok inner
+        _ -> Err (Error.make "Cannot unwrap non-pointer type")
+
+{-
+    TO C TYPES
+    ==========
+-}
+
+
+signedIntegralTypeToCCode : BitWidth -> String
+signedIntegralTypeToCCode w =
+    case w of
+
+        Bits1 ->
+            "boolean"
+
+        Bits8 ->
+            "int8_t"
+
+        Bits16 ->
+            "int16_t"
+
+        Bits32 ->
+            "int32_t"
+
+        Bits64 ->
+            "int64_t"
+        BitsChar -> "char"
+
+
+unsignedIntegralTypeToCCode : BitWidth -> String
+unsignedIntegralTypeToCCode w =
+    case w of
+
+        Bits1 ->
+            "boolean"
+
+        Bits8 ->
+            "uint8_t"
+
+        Bits16 ->
+            "uint16_t"
+
+        Bits32 ->
+            "uint32_t"
+
+        Bits64 ->
+            "uint64_t"
+
+        BitsChar -> "unsigned char"
+
+
+{-| Returns the C type name for a CAsm type
+|-}
+typeToCCode : SymbolType -> String
+typeToCCode t =
+    case t of
+        Signed w ->
+            signedIntegralTypeToCCode w
+
+        Unsigned w ->
+            unsignedIntegralTypeToCCode w
+
+        Structure s ->
+            "struct " ++ s
+
+        Constant c ->
+            "const " ++ typeToCCode c
+
+        Pointer p ->
+            typeToCCode p ++ "*"
+
+        Void ->
+            "void"
+
+        Parametric t ->
+           String.join "_" <| (::) t.name <| List.map typeToCCode t.args
