@@ -1,4 +1,4 @@
-module CAsm.CAsm exposing (..)
+module CAsm exposing (..)
 {-| Assembly parser and exporter
 |-}
 

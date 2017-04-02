@@ -1,13 +1,13 @@
-module CAsm.AstBuilder exposing (toAst, toFunction)
+module CAst.AstBuilder exposing (toAst, toFunction)
 {-| Describe me please...
 |-}
 
 
-import CAsm.CAsm exposing (..)
+import CAsm exposing (..)
 import CAsm.Error as Error exposing (Error, wrapError)
 import CAsm.FlowGraph exposing (FlowPath(..), flowGraphFor, hasJumpTo, isBlockALoop, isJumpALoop, loopEdges, loopNodes)
 import CAsm.SymbolType as SymbolType exposing (BitWidth(..), SymbolType(..), bool, typeToString, unwrapPointer)
-import CAsm.CAst exposing (..)
+import CAst exposing (..)
 import Dict
 import List.Extra
 

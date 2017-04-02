@@ -1,11 +1,11 @@
-module CAsm.CAsmSample exposing (..)
+module CAsmSample exposing (..)
 {-| Sample for generating a simple expression block
 |-}
 
-import CAsm.AstBuilder exposing (toAst, toFunction)
-import CAsm.AstPrinter exposing (functionToString)
-import CAsm.CodeStyle exposing (defaultCodeStyle, applyCodeStyle)
-import CAsm.CAsm exposing (..)
+import CAst.AstBuilder exposing (toAst, toFunction)
+import CAst.AstPrinter exposing (functionToString)
+import CAst.CodeStyle exposing (defaultCodeStyle, applyCodeStyle)
+import CAsm exposing (..)
 import CAsm.Error exposing (errorToString)
 import CAsm.SymbolType exposing (..)
 import CAsm.DSL exposing (..)
@@ -99,7 +99,7 @@ pre { line-heigth:1.2em; }
 
 .c-code { padding: 2em 0.5em; white-space: pre-wrap; background: #222220; color: #999; }
 
-.c-code .token { cursor: pointer; border:none; }
+.c-code .token { cursor: pointer; border:none; transition: background-color 0.3s, color 0.3s; }
 .c-code .token:hover { background: #444; border-radius: 2px; }
 .c-code .token-keyword { color: #c33; }
 .c-code .token-type { color: #39c; }

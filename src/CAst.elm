@@ -1,9 +1,9 @@
-module CAsm.CAst exposing (..)
+module CAst exposing (..)
 
 {-| Describe me please...
 -}
 
-import CAsm.CAsm exposing (..)
+import CAsm exposing (..)
 import CAsm.SymbolType exposing (SymbolType)
 
 

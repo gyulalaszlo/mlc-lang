@@ -1,11 +1,11 @@
-module CAsm.CodeStyle exposing
+module CAst.CodeStyle exposing
     ( defaultCodeStyle, applyCodeStyle
 
     )
 {-| Describe me please...
 |-}
 
-import CAsm.AstPrinter exposing (Token)
+import CAst.AstPrinter exposing (Token)
 import Dict exposing (Dict)
 
 

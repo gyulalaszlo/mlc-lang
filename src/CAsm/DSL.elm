@@ -2,7 +2,7 @@ module CAsm.DSL exposing (..)
 {-| DSL for building Assemblies from Elm for debugging.
 |-}
 
-import CAsm.CAsm exposing (..)
+import CAsm exposing (..)
 import Dict
 import List.Extra
 

@@ -1,11 +1,11 @@
-module CAsm.AstPrinter exposing
+module CAst.AstPrinter exposing
     ( functionToString, Token
 
     )
 {-| Describe me please...
 |-}
 
-import CAsm.CAst exposing (BinaryOp(..), Expression, ExpressionBody(..), FunctionStatement, Statement(..), StatementList)
+import CAst exposing (BinaryOp(..), Expression, ExpressionBody(..), FunctionStatement, Statement(..), StatementList)
 import CAsm.SymbolType exposing (typeToCCode)
 
 type alias Token =

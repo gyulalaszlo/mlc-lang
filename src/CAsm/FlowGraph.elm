@@ -2,7 +2,7 @@ module CAsm.FlowGraph exposing (..)
 {-| Describe me please...
 |-}
 
-import CAsm.CAsm exposing (Blk, BlkExit(..), CAsm, LabelName, findBy, nextNodeOf)
+import CAsm exposing (Blk, BlkExit(..), CAsm, LabelName, findBy, nextNodeOf)
 import List.Extra
 import Set exposing (Set)
 
