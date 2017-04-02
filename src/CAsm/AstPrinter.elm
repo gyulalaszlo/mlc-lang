@@ -1,10 +1,15 @@
-module CAsm.AstPrinter exposing (functionToString, defaultCodeLayout)
+module CAsm.AstPrinter exposing
+    ( functionToString
+
+    , defaultCodeStyle, applyCodeStyle
+    )
 {-| Describe me please...
 |-}
 
 import CAsm.CAst exposing (..)
 import CAsm.SymbolType exposing (typeToCCode)
 import Codegen.Indented exposing (Line(..), Token, applyIndents)
+import Dict exposing (Dict)
 
 type SideWs
     = NoSpace
@@ -25,81 +30,146 @@ breakBefore = { left = LineBreak, right = NoSpace }
 breakAfter = { left = NoSpace, right = LineBreak }
 breakBoth = { left = LineBreak, right = LineBreak }
 
-type alias Braces =
-    { open: Ws, close: Ws }
+type alias CodeStyle = Dict String Ws
 
-type alias CodeLayout =
-    { function:
-        { name: Ws
-        , returns: Ws
-        , openParen: Ws
-        , closeParen: Ws
-        , argColon: Ws
-        , argType: Ws
-        , argName: Ws
-        , braces: Braces
-        }
-    , comment: Ws
-    , declare: { type_: Ws, name: Ws, semi: Ws }
-    , assign: { name: Ws, expr: Ws, semi: Ws }
-    , return: { keyword: Ws, expr: Ws, semi: Ws }
-    , continue: { keyword: Ws, semi: Ws }
-    }
+defaultCodeStyle : CodeStyle
+defaultCodeStyle =
+    Dict.fromList
+        [ ("function.name", spaceLeft)
+        , ("function.returns", noSpace)
+        , ("function.paren.open", spaceRight)
+        , ("function.paren.close", spaceBoth)
+        , ("function.arg.type", noSpace)
+        , ("function.arg.name", spaceLeft)
+        , ("function.arg.colon", spaceRight)
+        , ("function.braces.open", breakAfter)
+        , ("function.braces.close", breakAfter)
 
-ws : Ws -> Token -> List Token
+        , ("while.paren.open", noSpace)
+        , ("while.paren.close", noSpace)
+        , ("while.braces.open", breakAfter)
+        , ("while.braces.close", breakAfter)
+
+        , ("comment.block", breakBoth)
+
+        , ("declare.type", noSpace)
+        , ("declare.name", spaceLeft)
+        , ("declare.semi", breakAfter)
+
+        , ("assign.name", spaceRight)
+        , ("assign.expr", spaceLeft)
+        , ("assign.semi", breakAfter)
+
+        , ("expr.call.name", noSpace)
+        , ("expr.call.paren.open", noSpace)
+        , ("expr.call.paren.close", noSpace)
+
+        , ("expr.binary.op", spaceBoth)
+        , ("expr.binary.paren.open", noSpace)
+        , ("expr.binary.paren.close", noSpace)
+        , ("expr.binary.nth.bracket.open", noSpace)
+        , ("expr.binary.nth.bracket.close", noSpace)
+
+        , ("expr.lvalue", noSpace)
+
+        , ("if.paren.open", noSpace)
+        , ("if.paren.close", noSpace)
+        , ("if.then.braces.open", breakAfter)
+        , ("if.then.braces.close", noSpace)
+        , ("if.else.braces.open", breakAfter)
+        , ("if.else.braces.close", breakAfter)
+        , ("if.else.keyword", spaceBoth)
+        , ("if.keyword", spaceRight)
+
+        , ("literal", noSpace)
+
+        , ("continue.keyword", noSpace)
+        , ("continue.semi", breakAfter)
+
+        , ("return.keyword", spaceRight)
+        , ("return.semi", breakAfter)
+        ]
+
+--type alias CodeLayout =
+--    { function:
+--        { name: Ws
+--        , returns: Ws
+--        , openParen: Ws
+--        , closeParen: Ws
+--        , argColon: Ws
+--        , argType: Ws
+--        , argName: Ws
+--        }
+--    , comment: Ws
+--    , declare: { type_: Ws, name: Ws, semi: Ws }
+--    , assign: { name: Ws, expr: Ws, semi: Ws }
+--    , return: { keyword: Ws, expr: Ws, semi: Ws }
+--    , continue: { keyword: Ws, semi: Ws }
+--    }
+
+ws : String -> Token -> List Token
 ws w t = wss w [t]
 
-wss : Ws -> List Token -> List Token
-wss w ts = List.concat [ (sideWs w.left), ts, (sideWs w.right)]
+wss : String -> List Token -> List Token
+wss w ts = List.map (\t -> { t | tag = w }) ts
+
+applyWs : Ws -> Token -> List Token
+applyWs {left, right} t =
+    List.concat [sideWs left, [t], sideWs right]
 
 sideWs : SideWs -> List Token
 sideWs w =
     case w of
         NoSpace -> []
-        Space -> [whiteSpaceToken " "]
-        LineBreak -> [whiteSpaceToken "\n"]
+        Space -> [whiteSpaceToken "" " "]
+        LineBreak -> [whiteSpaceToken "" "\n"]
 
 
-defaultCodeLayout : CodeLayout
-defaultCodeLayout =
-    { function =    { name = spaceLeft
-                    , returns = noSpace
-                    , openParen = spaceRight
-                    , closeParen = spaceBoth
-                    , argColon = spaceRight
-                    , argType = noSpace
-                    , argName = spaceLeft
-                    , braces = { open = breakAfter, close = breakAfter}
-                    }
-    , comment = breakBoth
-    , declare = { type_ = noSpace, name = spaceLeft, semi = breakAfter }
-    , assign = { name = spaceRight, expr = spaceLeft, semi = breakAfter }
-    , return = { keyword = noSpace, expr = spaceLeft, semi = breakAfter }
-    , continue = { keyword = noSpace, semi = breakAfter }
-    }
+applyCodeStyle : CodeStyle -> List Token -> List Token
+applyCodeStyle cs ts =
+    let tokenWs {tag} = Dict.get tag cs |> Maybe.withDefault spaceRight
+    in List.concatMap (\t -> applyWs (tokenWs t) <| t) ts
+
+--defaultCodeLayout : CodeLayout
+--defaultCodeLayout =
+--    { function =    { name = spaceLeft
+--                    , returns = noSpace
+--                    , openParen = spaceRight
+--                    , closeParen = spaceBoth
+--                    , argColon = spaceRight
+--                    , argType = noSpace
+--                    , argName = spaceLeft
+--                    , braces = { open = breakAfter, close = breakAfter}
+--                    }
+--    , comment = breakBoth
+--    , declare = { type_ = noSpace, name = spaceLeft, semi = breakAfter }
+--    , assign = { name = spaceRight, expr = spaceLeft, semi = breakAfter }
+--    , return = { keyword = noSpace, expr = spaceLeft, semi = breakAfter }
+--    , continue = { keyword = noSpace, semi = breakAfter }
+--    }
 
 
-functionToString : CodeLayout -> FunctionStatement -> List Token
-functionToString cl f =
+functionToString :  FunctionStatement -> List Token
+functionToString f =
     let
         arg (n,t) =
-            List.concat
-                [ ws cl.function.argType <| typeToken (typeToCCode t)
-                , ws cl.function.argName <| symbolToken n
-                ]
+            [ typeToken "function.arg.type" (typeToCCode t)
+            , symbolToken "function.arg.name" n
+            ]
 
         fnHead =
             List.concat <|
-                [ ws cl.function.returns <| typeToken (typeToCCode f.returns)
-                , ws cl.function.name <| functionNameToken f.name
-                , ws cl.function.openParen <| parenToken "("
+                [   [ typeToken "function.returns" (typeToCCode f.returns)
+                    , functionNameToken "function.name" f.name
+                    , parenToken "function.paren.open" "("
+                    ]
                 , List.map arg f.args
-                        |> List.intersperse (ws cl.function.argColon colonToken)
+                        |> List.intersperse [(colonToken "function.arg.colon" ",")]
                         |> List.concat
-                , ws cl.function.closeParen <| parenToken ")"
+                , [ parenToken "function.paren.close" ")" ]
                 ]
     in
-        fnHead ++ (bracedStatementList cl cl.function.braces f.body)
+        fnHead ++ (bracedStatementList "function.braces" f.body)
 
 
 
@@ -107,78 +177,77 @@ functionToString cl f =
 --astToString = statementListToString
 
 
-statementListToString : CodeLayout -> StatementList -> List Token
-statementListToString cl s =
-    List.concatMap (statementToString cl) s
+statementListToString :  StatementList -> List Token
+statementListToString s =
+    List.concatMap statementToString s
 
 
 prefixedParen : String -> Expression -> List Token
 prefixedParen prefix e =
     List.concat
-        [ [ keywordToken prefix, parenToken "(" ]
+        [ [ keywordToken (prefix ++ ".keyword") prefix
+        , parenToken (prefix ++ ".paren.open") "(" ]
         , expression e
-        , [parenToken ")"]
+        , [parenToken (prefix ++ ".paren.close") ")"]
         ]
 
 
-bracedStatementList : CodeLayout -> Braces -> StatementList -> List Token
-bracedStatementList cl  {open, close} ss =
+bracedStatementList : String -> StatementList -> List Token
+bracedStatementList baseScope ss =
     List.concat
-        [ ws open <| braceToken "{"
-        , statementListToString cl ss
-        , ws close <| braceToken "}"
+        [ [ braceToken (baseScope ++ ".open") "{" ]
+        , statementListToString ss
+        , [braceToken (baseScope ++ ".close") "}" ]
         ]
 
 
-statementToString : CodeLayout -> Statement -> List Token
-statementToString cl s =
+statementToString : Statement -> List Token
+statementToString s =
     case s of
 
         SComment c ->
-            ws cl.comment <| commentToken <| "/*\n" ++ String.join "\n" c  ++ "\n*/"
+            [ commentToken "comment.block" <| "/*\n" ++ String.join "\n" c  ++ "\n*/" ]
 
         SLValueDeclare {name, type_} ->
-            List.concat
-                [ ws cl.declare.type_ <| typeToken (typeToCCode type_)
-                , ws cl.declare.name <|  symbolToken name
-                , ws cl.declare.semi <| semiToken
-                ]
+            [  typeToken "declare.type" (typeToCCode type_)
+            ,  symbolToken "declare.name" name
+            ,  semiToken "declare.semi" ";"
+            ]
 
         SLValueAssign {name, type_, value} ->
             List.concat
-                [ ws cl.assign.name <|  symbolToken name
-                , [assignToken]
-                , wss cl.assign.expr <| expression value
-                , ws cl.assign.semi <| semiToken
+                [ [ symbolToken "assign.name" name ]
+                , [assignToken "assign.op" "="]
+                , expression value
+                , [ semiToken "assign.semi" ";"]
                 ]
 
         SWhile {condition, body} ->
-            (prefixedParen "while" condition) ++ bracedStatementList cl cl.function.braces body
+            (prefixedParen "while" condition) ++ bracedStatementList "while.braces" body
 
         SIf {condition, true, false} ->
             List.concat
                 [ prefixedParen "if" condition
-                , bracedStatementList cl cl.function.braces true
-                , [keywordToken "else"]
-                , bracedStatementList cl cl.function.braces false
+                , bracedStatementList "if.then.braces" true
+                , [keywordToken "if.else.keyword" "else"]
+                , bracedStatementList "if.else.braces" false
                 ]
 
         SReturn e ->
             List.concat
-                [ ws cl.return.keyword <| keywordToken "return"
-                , wss cl.return.expr <| expression e
-                , ws cl.return.semi <| semiToken
+                [ [ keywordToken "return.keyword" "return" ]
+                , wss "return.expr" <| expression e
+                , [ semiToken "return.semi" ";" ]
                 ]
 
         SContinue ->
-            List.concat
-                [ ws cl.continue.keyword <| keywordToken "continue"
-                , ws cl.continue.semi <| semiToken
-                ]
+            [ keywordToken "continue.keyword" "continue"
+            , semiToken "continue.semi" ";"
+            ]
 
-        SBreak -> [keywordToken "break", semiToken]
-        SGoTo l -> [keywordToken "goto", labelToken l, semiToken]
-        SLabel l -> [keywordToken "label", labelToken (l ++ ":"), semiToken]
+        SBreak -> [keywordToken "break.keyword" "break", semiToken "break.semi" ";" ]
+        SGoTo l -> [keywordToken "goto.keyword" "goto", labelToken "goto.label" l, semiToken "goto.semi" ";"]
+        SLabel l -> [labelToken "label.name" (l ++ ":")]
 
 
 
@@ -190,23 +259,23 @@ expressionBody : ExpressionBody -> List Token
 expressionBody e =
     case e of
         ExprWithComment c body ->
-            (commentToken <| "//" ++ c) :: expressionBody body
+            (commentToken "comment.line" <| "//" ++ c) :: expressionBody body
 
         ExprFunctionCall n args ->
             List.concat
-                [ [functionNameToken n, parenToken "("]
+                [ [functionNameToken "expr.call.name" n, parenToken "expr.call.paren.open" "("]
                 , List.concatMap expression args
-                , [parenToken ")"]
+                , [parenToken "expr.call.paren.close" ")"]
                 ]
 
-        ExprLValue n -> [symbolToken n]
+        ExprLValue n -> [symbolToken "expr.lvalue" n]
 
         ExprBinary operator left right ->
-            [parenToken "("]
+            [parenToken "expr.binary.paren.open" "("]
             ++ binaryOpToString operator left right
-            ++ [ parenToken ")" ]
+            ++ [ parenToken "expr.binary.paren.close" ")" ]
 
-        ExprLiteral { text } -> [ literalToken text]
+        ExprLiteral { text } -> [ literalToken "literal" text]
 
 --        _ -> []
 
@@ -214,7 +283,7 @@ expressionBody e =
 
 binaryOpToString : BinaryOp -> Expression -> Expression -> List Token
 binaryOpToString  operator left right =
-    let mid s = expression left ++ [opToken s] ++ expression right
+    let mid s = expression left ++ [opToken "expr.binary.op" s] ++ expression right
     in case operator of
         BinaryPlus ->  mid "+"
         BinaryMinus ->  mid "-"
@@ -222,7 +291,13 @@ binaryOpToString  operator left right =
         BinaryDividedBy ->  mid "/"
 
 
-        BinaryNth -> expression right ++ [opToken "["] ++ expression left ++ [opToken "]"]
+        BinaryNth ->
+            List.concat
+                [ expression right
+                , [opToken "expr.binary.nth.bracket.open" "["]
+                , expression left
+                , [opToken "expr.binary.nth.bracket.close" "]"]
+                ]
         CompLt -> mid "<"
         CompGt -> mid ">"
         CompEq -> mid "=="
@@ -238,23 +313,25 @@ binaryOpToString  operator left right =
     ===========
 -}
 
-symbolToken = Token "symbol"
-labelToken = Token "label"
-typeToken = Token "type"
-parenToken = Token "parenthesis"
-braceToken = Token "brace"
-functionNameToken = Token "functionName"
-semiToken = Token "semicolon" ";"
-colonToken = Token "colon" ","
-assignToken = Token "assign" "="
-opToken = Token "op"
-commentToken = Token "comment"
-keywordToken = Token "keyword"
-literalToken = Token "literal"
-whiteSpaceToken = Token "whiteSpace"
+symbolToken = token "symbol"
+labelToken = token "label"
+typeToken = token "type"
+parenToken = token "parenthesis"
+braceToken = token "brace"
+functionNameToken = token "functionName"
+semiToken = token "semicolon"
+colonToken = token "colon"
+assignToken = token "assign"
+opToken = token "op"
+commentToken = token "comment"
+keywordToken = token "keyword"
+literalToken = token "literal"
+whiteSpaceToken = token "whiteSpace"
 
-space = whiteSpaceToken " "
 
+
+token : String -> String -> String -> Token
+token c = Token c
 
 tokens : List Token -> Line
 tokens ts =

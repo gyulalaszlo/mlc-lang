@@ -3,12 +3,11 @@ module CAsm.CAsmSample exposing (..)
 |-}
 
 import CAsm.AstBuilder exposing (toAst, toFunction)
-import CAsm.AstPrinter exposing (defaultCodeLayout, functionToString)
+import CAsm.AstPrinter exposing (applyCodeStyle, defaultCodeStyle, functionToString)
 import CAsm.CAsm exposing (..)
 import CAsm.Error exposing (errorToString)
 import CAsm.SymbolType exposing (..)
 import CAsm.DSL exposing (..)
-import CAsm.CPrinter exposing (toCCode)
 import Codegen.Indented exposing (applyIndents)
 import Html
 import Html.Attributes exposing (class)
@@ -61,17 +60,18 @@ sample =
         <| withNameAndParams "indexOfStr" [ch, s] (Parametric (ParametricType "Maybe" [u64]))
 
 
+
 tokenList ts =
     List.map
-        (\{class, text} -> Html.span
-            [Html.Attributes.class ("token token-" ++ class ++ " " ++ class)]
+        (\{class, text, tag} -> Html.span
+            [Html.Attributes.class ("token token-" ++ class ++ " " ++ class ++ " " ++ tag)]
             [Html.text text] )
         ts
 
 astView s =
     case toAst s of
         Ok ast -> Html.code []
-                [ Html.pre [class "c-code"]  <| tokenList <| functionToString defaultCodeLayout <| toFunction s ast
+                [ Html.pre [class "c-code"]  <| tokenList <| applyCodeStyle defaultCodeStyle <| functionToString <| toFunction s ast
                 , Html.hr [] []
 --                , Html.text <| toString ast
                 ]

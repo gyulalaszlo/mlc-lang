@@ -19,6 +19,7 @@ type Line
 
 type alias Token =
     { class: String
+    , tag: String
     , text: String
     }
 
