@@ -2,8 +2,8 @@ module CAsmSample exposing (..)
 {-| Sample for generating a simple expression block
 |-}
 
-import CAst.AstBuilder exposing (toAst, toFunction)
-import CAst.AstPrinter exposing (functionToString)
+import CAst.AstBuilder exposing (toAst, toAst)
+import CAst.AstPrinter exposing (functionToString, statementListToString)
 import CAst.CodeStyle exposing (defaultCodeStyle, applyCodeStyle)
 import CAsm exposing (..)
 import CAsm.Error exposing (errorToString)
@@ -74,7 +74,10 @@ tokenList ts =
 astView s =
     case toAst s of
         Ok ast -> Html.code []
-                [ Html.pre [class "c-code"]  <| tokenList <| applyCodeStyle defaultCodeStyle <| functionToString <| toFunction s ast
+                [ Html.pre [class "c-code"]
+                    <| tokenList
+                    <| applyCodeStyle defaultCodeStyle
+                    <| statementListToString ast
                 , Html.hr [] []
 --                , Html.text <| toString ast
                 ]

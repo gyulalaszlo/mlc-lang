@@ -111,7 +111,6 @@ wrapTable separator t =
 
     in
         cs
---    in [toString cols] ++ cs ++ [toString t]
 
 {-
    Applies the indentation guides to the text

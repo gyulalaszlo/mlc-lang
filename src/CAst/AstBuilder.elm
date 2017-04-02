@@ -1,4 +1,4 @@
-module CAst.AstBuilder exposing (toAst, toFunction)
+module CAst.AstBuilder exposing (toAst)
 {-| Describe me please...
 |-}
 
@@ -12,13 +12,15 @@ import Dict
 import List.Extra
 
 
-toFunction : CAsm -> StatementList -> FunctionStatement
+toFunction : CAsm -> StatementList -> StatementList
 toFunction c sl =
-    { name = c.name
-    , args = List.map (\{name, type_} -> (name, type_)) c.parameters
-    , returns = c.returnType
-    , body = sl
-    }
+    [ SFunctionDeclaration
+        { name = c.name
+        , args = List.map (\{name, type_} -> (name, type_)) c.parameters
+        , returns = c.returnType
+        , body = sl
+        }
+    ]
 
 {-| Converts a CAsm assembly to C Code
 |-}
@@ -42,6 +44,7 @@ toAst c =
             |> List.map (blockToCode c)
             |> Error.wrapErrors ("Error while compiling blocks for Assembly:" ++ toString c.name)
             |> Result.map (\bs -> header ++ (List.concat bs))
+            |> Result.map (toFunction c)
 
 
 {-| Converts a single block to C code with labels, indentation and instructions

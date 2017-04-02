@@ -1,5 +1,5 @@
 module CAst.AstPrinter exposing
-    ( functionToString, Token
+    ( statementListToString, functionToString, Token
 
     )
 {-| Describe me please...
@@ -111,6 +111,8 @@ statementToString s =
         SGoTo l -> [keywordToken "goto.keyword" "goto", labelToken "goto.label" l, semiToken "goto.semi" ";"]
         SLabel l -> [labelToken "label.name" (l ++ ":")]
 
+        SFunctionDefinition f -> []
+        SFunctionDeclaration f -> functionToString f
 
 
 expression : Expression -> List Token

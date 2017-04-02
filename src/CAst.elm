@@ -7,6 +7,12 @@ import CAsm exposing (..)
 import CAsm.SymbolType exposing (SymbolType)
 
 
+type alias FunctionDefinition =
+    { name : String
+    , args: List (SymbolName, SymbolType)
+    , returns: SymbolType
+    }
+
 type alias FunctionStatement =
     { name : String
     , args: List (SymbolName, SymbolType)
@@ -29,6 +35,9 @@ type Statement
     | SLValueAssign LValueAssignStatement
     -- Comments are also special
     | SComment (List String)
+    -- Function declarations and definitions
+    | SFunctionDefinition FunctionDefinition
+    | SFunctionDeclaration FunctionStatement
 
 
 {-| A while loop is a condition and a body wrapped
