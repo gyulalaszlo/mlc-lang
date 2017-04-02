@@ -1,4 +1,4 @@
-module CAsm.AstPrinter exposing (astToString, functionToString)
+module CAsm.AstPrinter exposing (functionToString, defaultCodeLayout)
 {-| Describe me please...
 |-}
 
@@ -6,37 +6,111 @@ import CAsm.CAst exposing (..)
 import CAsm.SymbolType exposing (typeToCCode)
 import Codegen.Indented exposing (Line(..), Token, applyIndents)
 
-functionToString : FunctionStatement -> String
-functionToString f =
+type SideWs
+    = NoSpace
+    | Space
+    | LineBreak
+
+type alias Ws =
+    { left: SideWs
+    , right: SideWs
+    }
+
+noSpace = { left = NoSpace, right = NoSpace }
+spaceLeft = { left = Space, right = NoSpace }
+spaceRight = { left = NoSpace, right = Space }
+spaceBoth = { left = Space, right = Space }
+
+breakBefore = { left = LineBreak, right = NoSpace }
+breakAfter = { left = NoSpace, right = LineBreak }
+breakBoth = { left = LineBreak, right = LineBreak }
+
+type alias Braces =
+    { open: Ws, close: Ws }
+
+type alias CodeLayout =
+    { function:
+        { name: Ws
+        , returns: Ws
+        , openParen: Ws
+        , closeParen: Ws
+        , argColon: Ws
+        , argType: Ws
+        , argName: Ws
+        , braces: Braces
+        }
+    , comment: Ws
+    , declare: { type_: Ws, name: Ws, semi: Ws }
+    , assign: { name: Ws, expr: Ws, semi: Ws }
+    , return: { keyword: Ws, expr: Ws, semi: Ws }
+    , continue: { keyword: Ws, semi: Ws }
+    }
+
+ws : Ws -> Token -> List Token
+ws w t = wss w [t]
+
+wss : Ws -> List Token -> List Token
+wss w ts = List.concat [ (sideWs w.left), ts, (sideWs w.right)]
+
+sideWs : SideWs -> List Token
+sideWs w =
+    case w of
+        NoSpace -> []
+        Space -> [whiteSpaceToken " "]
+        LineBreak -> [whiteSpaceToken "\n"]
+
+
+defaultCodeLayout : CodeLayout
+defaultCodeLayout =
+    { function =    { name = spaceLeft
+                    , returns = noSpace
+                    , openParen = spaceRight
+                    , closeParen = spaceBoth
+                    , argColon = spaceRight
+                    , argType = noSpace
+                    , argName = spaceLeft
+                    , braces = { open = breakAfter, close = breakAfter}
+                    }
+    , comment = breakBoth
+    , declare = { type_ = noSpace, name = spaceLeft, semi = breakAfter }
+    , assign = { name = spaceRight, expr = spaceLeft, semi = breakAfter }
+    , return = { keyword = noSpace, expr = spaceLeft, semi = breakAfter }
+    , continue = { keyword = noSpace, semi = breakAfter }
+    }
+
+
+functionToString : CodeLayout -> FunctionStatement -> List Token
+functionToString cl f =
     let
+        arg (n,t) =
+            List.concat
+                [ ws cl.function.argType <| typeToken (typeToCCode t)
+                , ws cl.function.argName <| symbolToken n
+                ]
+
         fnHead =
-            tokens <|
-                List.concat <|
-                    [   [ typeToken (typeToCCode f.returns)
-                        , functionNameToken f.name
-                        , parenToken "("
-                        ]
-                    ,   List.map (\(n,t)-> [typeToken (typeToCCode t), symbolToken n]) f.args
-                            |> List.intersperse [colonToken]
-                            |> List.concat
-                    ,   [ parenToken ")" ]
-                    ]
+            List.concat <|
+                [ ws cl.function.returns <| typeToken (typeToCCode f.returns)
+                , ws cl.function.name <| functionNameToken f.name
+                , ws cl.function.openParen <| parenToken "("
+                , List.map arg f.args
+                        |> List.intersperse (ws cl.function.argColon colonToken)
+                        |> List.concat
+                , ws cl.function.closeParen <| parenToken ")"
+                ]
     in
-        fnHead :: (bracedStatementList f.body)
-            |> applyIndents
-            |> String.join "\n"
+        fnHead ++ (bracedStatementList cl cl.function.braces f.body)
 
 
 
-astToString : StatementList -> String
-astToString s =
-    List.concatMap statementToString s
-        |> applyIndents
-        |> String.join "\n"
+--astToString : StatementList -> List Token
+--astToString = statementListToString
 
-statementListToString : StatementList -> List Line
-statementListToString s =
-    List.concatMap statementToString s
+
+statementListToString : CodeLayout -> StatementList -> List Token
+statementListToString cl s =
+    List.concatMap (statementToString cl) s
+
 
 prefixedParen : String -> Expression -> List Token
 prefixedParen prefix e =
@@ -45,45 +119,66 @@ prefixedParen prefix e =
         , expression e
         , [parenToken ")"]
         ]
-bracedStatementList : StatementList -> List Line
-bracedStatementList ss =
+
+
+bracedStatementList : CodeLayout -> Braces -> StatementList -> List Token
+bracedStatementList cl  {open, close} ss =
     List.concat
-        [ [ tokens [braceToken "{"], Indent ]
-        , statementListToString ss
-        , [ Outdent, tokens [braceToken "}"]]
+        [ ws open <| braceToken "{"
+        , statementListToString cl ss
+        , ws close <| braceToken "}"
         ]
 
 
-statementToString : Statement -> List Line
-statementToString s =
+statementToString : CodeLayout -> Statement -> List Token
+statementToString cl s =
     case s of
 
         SComment c ->
-            List.concat
-                [ [tokens [commentToken "/*"], Indent ]
-                , List.map (\l -> tokens [commentToken l] ) c
-                , [ Outdent, tokens [commentToken "*/"]]
-                ]
+            ws cl.comment <| commentToken <| "/*\n" ++ String.join "\n" c  ++ "\n*/"
+
         SLValueDeclare {name, type_} ->
-            [ tokens <| [ typeToken (typeToCCode type_), symbolToken name, semiToken]]
+            List.concat
+                [ ws cl.declare.type_ <| typeToken (typeToCCode type_)
+                , ws cl.declare.name <|  symbolToken name
+                , ws cl.declare.semi <| semiToken
+                ]
 
         SLValueAssign {name, type_, value} ->
-            [ tokens <| [ symbolToken name, assignToken] ++ expression value ++ [semiToken]]
+            List.concat
+                [ ws cl.assign.name <|  symbolToken name
+                , [assignToken]
+                , wss cl.assign.expr <| expression value
+                , ws cl.assign.semi <| semiToken
+                ]
 
         SWhile {condition, body} ->
-            (tokens <| prefixedParen "while" condition) :: bracedStatementList body
+            (prefixedParen "while" condition) ++ bracedStatementList cl cl.function.braces body
 
         SIf {condition, true, false} ->
             List.concat
-                [ (tokens <| prefixedParen "if" condition) :: bracedStatementList true
-                , (tokens [keywordToken "else"] ) :: bracedStatementList false
+                [ prefixedParen "if" condition
+                , bracedStatementList cl cl.function.braces true
+                , [keywordToken "else"]
+                , bracedStatementList cl cl.function.braces false
                 ]
 
-        SReturn e -> [ (tokens <| (keywordToken "return") :: expression e ++ [semiToken]) ]
-        SContinue -> [ (tokens [keywordToken "continue", semiToken]) ]
-        SBreak -> [ (tokens [keywordToken "break", semiToken]) ]
-        SGoTo l -> [ (tokens [keywordToken "goto", labelToken l, semiToken]) ]
-        SLabel l -> [ (tokens [keywordToken "label", labelToken (l ++ ":"), semiToken]) ]
+        SReturn e ->
+            List.concat
+                [ ws cl.return.keyword <| keywordToken "return"
+                , wss cl.return.expr <| expression e
+                , ws cl.return.semi <| semiToken
+                ]
+
+        SContinue ->
+            List.concat
+                [ ws cl.continue.keyword <| keywordToken "continue"
+                , ws cl.continue.semi <| semiToken
+                ]
+
+        SBreak -> [keywordToken "break", semiToken]
+        SGoTo l -> [keywordToken "goto", labelToken l, semiToken]
+        SLabel l -> [keywordToken "label", labelToken (l ++ ":"), semiToken]
 
 
 
@@ -156,6 +251,9 @@ opToken = Token "op"
 commentToken = Token "comment"
 keywordToken = Token "keyword"
 literalToken = Token "literal"
+whiteSpaceToken = Token "whiteSpace"
+
+space = whiteSpaceToken " "
 
 
 tokens : List Token -> Line

@@ -3,7 +3,7 @@ module CAsm.CAsmSample exposing (..)
 |-}
 
 import CAsm.AstBuilder exposing (toAst, toFunction)
-import CAsm.AstPrinter exposing (astToString, functionToString)
+import CAsm.AstPrinter exposing (defaultCodeLayout, functionToString)
 import CAsm.CAsm exposing (..)
 import CAsm.Error exposing (errorToString)
 import CAsm.SymbolType exposing (..)
@@ -11,6 +11,7 @@ import CAsm.DSL exposing (..)
 import CAsm.CPrinter exposing (toCCode)
 import Codegen.Indented exposing (applyIndents)
 import Html
+import Html.Attributes exposing (class)
 
 sample =
     let
@@ -60,10 +61,17 @@ sample =
         <| withNameAndParams "indexOfStr" [ch, s] (Parametric (ParametricType "Maybe" [u64]))
 
 
+tokenList ts =
+    List.map
+        (\{class, text} -> Html.span
+            [Html.Attributes.class ("token token-" ++ class ++ " " ++ class)]
+            [Html.text text] )
+        ts
+
 astView s =
     case toAst s of
         Ok ast -> Html.code []
-                [ Html.pre [] [ Html.text <| functionToString <| toFunction s ast]
+                [ Html.pre [class "c-code"]  <| tokenList <| functionToString defaultCodeLayout <| toFunction s ast
                 , Html.hr [] []
 --                , Html.text <| toString ast
                 ]
@@ -72,13 +80,33 @@ astView s =
 
 main =
     Html.div []
-        [ astView sample
+        [ css
+        , astView sample
         , Html.hr [] []
---        , Html.code [] [ Html.text <| toString <| toAst sample ]
-        , Html.hr [] []
---        , Html.pre [] [ Html.text <| String.join "\n" <| applyIndents <| toCCode sample ]
---        , Html.hr [] []
         , Html.pre [] [ Html.text <| prettyPrint sample ]
---        , Html.hr [] []
---        , Html.code [] [ Html.text <| toString sample ]
         ]
+
+css = Html.node "style" [Html.Attributes.type_ "text/css"]
+          [Html.text """
+
+body {  font-family: "Fira Code", Monaco, Courier New; font-size: 13px; }
+
+
+.c-code { padding: 2em 0.5em; white-space: pre-wrap; background: #222; color: #999; }
+
+.c-code .token { }
+.c-code .token-keyword { color: #c33; }
+.c-code .token-type { color: #39c; }
+.c-code .token-symbol { color: #7c7; }
+.c-code .token-comment { color: #666; }
+.c-code .token-parenthesis,
+.c-code .token-colon,
+.c-code .token-semicolon { color: #444; }
+.c-code .token-op,
+.c-code .token-assign { color: #c90; }
+.c-code .token-literal { color: #c09; }
+.c-code .token-functionName { color: #5ca; }
+
+
+                  """
+                  ]
