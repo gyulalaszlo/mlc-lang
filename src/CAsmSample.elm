@@ -99,7 +99,6 @@ body, pre {  font-family: "Fira Code", Monaco, Courier New; font-size: 12px; }
 
 pre { line-heigth:1.2em; }
 
-
 .c-code { padding: 2em 0.5em; white-space: pre-wrap; background: #222220; color: #999; }
 
 .c-code .token { cursor: pointer; border:none; transition: background-color 0.3s, color 0.3s; }
@@ -122,6 +121,11 @@ pre { line-heigth:1.2em; }
 .c-code .token-whiteSpace {  background: #222;  }
 .c-code .token-whiteSpace:hover {  background: #333;  }
 
+.c-code .token-indent { color: #7c3c00; }
+.c-code .token-outdent { color: #3c7c00; }
+
+.c-code .token-outdent:before { content: ""; }
+.c-code .token-indent:before { content: ""; }
 
 .c-code .token-keyword:hover { background-color: #c33; color: #222; }
 .c-code .token-type:hover { background-color: #39c; color: #222; }

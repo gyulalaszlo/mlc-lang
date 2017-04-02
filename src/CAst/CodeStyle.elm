@@ -23,11 +23,14 @@ defaultCodeStyle =
         , ("function.braces.close", blockClose)
 
         , ("while.paren.open", noSpace)
-        , ("while.paren.close", noSpace)
+        , ("while.paren.close", spaceRight)
         , ("while.braces.open", blockOpen)
         , ("while.braces.close", blockClose)
 
         , ("comment.block", breakAfter)
+        , ("comment.block.line", breakAfter)
+        , ("comment.block.open", blockOpen)
+        , ("comment.block.close", blockClose)
 
         , ("declare.type", noSpace)
         , ("declare.name", spaceLeft)
@@ -50,7 +53,7 @@ defaultCodeStyle =
         , ("expr.lvalue", noSpace)
 
         , ("if.paren.open", noSpace)
-        , ("if.paren.close", noSpace)
+        , ("if.paren.close", spaceRight)
         , ("if.then.braces.open", blockOpen)
         , ("if.then.braces.close", outdentBefore)
         , ("if.else.braces.open", blockOpen)
@@ -119,13 +122,13 @@ indentAfter : Ws
 indentAfter = { emptyWs |  indentRight = Indent }
 
 outdentBefore : Ws
-outdentBefore = { emptyWs | indentLeft = Outdent, left = LineBreak}
+outdentBefore = { emptyWs | indentLeft = Outdent}
 
 outdentAfter : Ws
 outdentAfter = { emptyWs |  indentRight = Outdent }
 
-blockOpen = { emptyWs | left = Space, right = LineBreak, indentRight = Indent }
-blockClose = { emptyWs | indentLeft = Outdent, left = LineBreak, right = LineBreak }
+blockOpen = { emptyWs | right = LineBreak, indentRight = Indent }
+blockClose = { emptyWs | indentLeft = Outdent, right = LineBreak }
 
 type alias CodeStyle = Dict String Ws
 
@@ -138,43 +141,98 @@ outdentToken = Token "outdent" "" ""
 wss : String -> List Token -> List Token
 wss w ts = List.map (\t -> { t | tag = w }) ts
 
-applyWs : Int -> Int -> Ws -> Token -> List Token
-applyWs indentL indentR {left, right} t =
-    List.concat [sideWs indentL t.tag left, [t], sideWs indentR t.tag right]
+applyWs : Ws -> Token -> List Token
+applyWs {left, right} t =
+    List.concat [sideWs t.tag left, [t], sideWs t.tag right]
 
-sideWs : Int -> String -> SideWs -> List Token
-sideWs indent tag w =
-    let indentStr = String.repeat indent "\t"
-    in case w of
-        NoSpace -> []
-        Space -> [whiteSpaceToken tag " "]
-        LineBreak -> [{ lineBreakToken | tag = tag }, whiteSpaceToken tag <| indentStr ]
 
 
 applyCodeStyle : CodeStyle -> List Token -> List Token
 applyCodeStyle cs ts =
-    List.foldl (applyCodeStyleHelepr cs) (0,[]) ts
-        |> Tuple.second
+    List.foldl (applyCodeStyleHelepr cs) [] ts
+        |> List.foldl (applyIndentsFromTokens "\t") initialApplyIndentState
+        |> .tokens
+--    List.foldl (applyCodeStyleHelepr cs) (0,[]) ts
+--        |> Tuple.second
 
-applyCodeStyleHelepr : CodeStyle -> Token -> (Int, List Token) -> (Int, List Token)
-applyCodeStyleHelepr cs t (indent, ts) =
+applyCodeStyleHelepr : CodeStyle -> Token -> List Token -> List Token
+applyCodeStyleHelepr cs t ts =
     let
         tokenWs = Dict.get t.tag cs |> Maybe.withDefault spaceRight
-        (indentL, indentR) =
-            case (tokenWs.indentLeft, tokenWs.indentRight) of
-                (Indent, Indent) -> (indent + 1, indent + 2)
-                (Indent, Outdent) -> (indent + 1, indent)
-                (Outdent, Indent) -> (max 0 <| indent - 1, indent)
-                (Outdent, Outdent) -> (max 0 <| indent - 1, max 0 <| indent - 2)
-                (Indent, NoIndent) -> (indent + 1, indent + 1)
-                (Outdent, NoIndent) -> (max 0 <| indent - 1, max 0 <| indent - 1)
-                (NoIndent, Indent) -> (indent, indent + 1)
-                (NoIndent, Outdent) -> (indent, max 0 <| indent - 1)
-                (NoIndent, NoIndent) -> (indent, indent)
+
+
+        wrapWithIndent : Ws -> List Token -> List Token
+        wrapWithIndent tokenWs ts =
+            List.concat
+                [ tokensForIndent tokenWs.indentLeft
+                , ts
+                , tokensForIndent tokenWs.indentRight
+                ]
 
     in
-        ( indentR
-        , ts ++ applyWs indentL indentR tokenWs t
-        )
+        ts ++ wrapWithIndent tokenWs (applyWs tokenWs t)
 
+indentString : String
+indentString = "\t"
+
+type alias ApplyIndentState =
+    { current: Int
+    , needsIndent: Bool
+    , tokens: List Token
+    }
+
+initialApplyIndentState : ApplyIndentState
+initialApplyIndentState =
+    { current = 0
+    , needsIndent = True
+    , tokens = []
+    }
+
+{-| Applies the indents coming from the white-space wrapping. This is done in two phases because
+the indentation of the next line is unknown at whitespace-wrapping time.
+-}
+applyIndentsFromTokens : String -> Token -> ApplyIndentState -> ApplyIndentState
+applyIndentsFromTokens indentWith t s =
+    let indentStr n = whiteSpaceToken "indent" <| String.repeat n indentWith
+        return indent tt = { s | current = indent, tokens = tokens ++ [tt]}
+
+        setNeedsIndent ss = { ss | needsIndent = True }
+
+        -- add indent to the
+        withIndent i t ss = { ss | needsIndent = False, tokens = tokens ++ [indentStr i, t] }
+
+        {tokens, current, needsIndent} = s
+    in
+        case t.class of
+            "indent" -> return (current + 1) indentToken
+            "outdent" -> return (max 0 (current - 1)) outdentToken
+            "line-break" ->
+                setNeedsIndent <|
+                    return current lineBreakToken
+
+            _ ->
+                if needsIndent
+                    then withIndent current t s
+                    else return current t
+
+
+{-
+    Convert ws to tokens
+-}
+
+sideWs : String -> SideWs -> List Token
+sideWs tag w =
+    case w of
+        NoSpace -> []
+        Space -> [whiteSpaceToken tag " "]
+        LineBreak -> [{ lineBreakToken | tag = tag }]
+
+
+
+tokensForIndent : WsIndent -> List Token
+tokensForIndent ind =
+    case ind of
+        Indent -> [indentToken]
+        Outdent -> [outdentToken]
+        NoIndent -> []
 

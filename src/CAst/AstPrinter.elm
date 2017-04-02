@@ -68,7 +68,12 @@ statementToString s =
     case s of
 
         SComment c ->
-            [ commentToken "comment.block" <| "/*\n" ++ String.join "\n" c  ++ "\n*/" ]
+            List.concat
+                [ [ commentToken "comment.block.open" "/*"]
+                , List.map (commentToken "comment.block.line") c
+                , [ commentToken "comment.block.close" "*/"]
+                ]
+--            [ commentToken "comment.block" <| "/*\n" ++ String.join "\n" c  ++ "\n*/" ]
 
         SLValueDeclare {name, type_} ->
             [  typeToken "declare.type" (typeToCCode type_)
