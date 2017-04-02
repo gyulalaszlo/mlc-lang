@@ -58,18 +58,35 @@ cssBody = """
 .ast-view .token-symbol:hover { background-color: #7c7; color: #222; }
 .ast-view .token-functionName:hover { background-color: #5ca; color: #222; }
 
-.ast-view .table { }
-.ast-view .table select { font-family: "Fira Code", Monaco, Courier New; border: none; background:none; color: #ccc; min-width:3em; }
-
 
 .ast-view { position:absolute; overflow:hidden; height:100%; width:100%; }
 .ast-view .code-view {  }
-.ast-view .code-style-editor { background: #111; position: absolute; right: 0; top:0;   height: 100%; overflow-y: scroll; padding: 0 1em; box-shadow: -5px 0 10px rgba(0,0,0,0.5); }
+.ast-view .code-style-editor { background: #111; border-left: 1px solid #333; position: absolute; right: 0; top:0;   height: 100%; overflow-y: scroll; padding: 0 1em; box-shadow: -5px 0 10px rgba(0,0,0,0.5); min-width: 400px; }
+
+/* code-style editor */
+
+.ast-view .table { line-height:1.4em; }
+.ast-view .table select { font-family: "Fira Code", Monaco, Courier New; border: none; background:none; color: #ccc; min-width:3em; }
+
+.ast-view .code-style-editor .code-style-header { padding: 0.2em 0; }
+.ast-view .code-style-editor .code-style-header input { width: 90%; }
+
 
 .ast-view .code-style-editor th {font-size:9px;}
-.ast-view .code-style-editor td.ws-key {font-size:13px;}
+.ast-view .code-style-editor td.ws-key {font-size:13px; border-bottom: 1px solid #222; }
 
 
+/* Changed - unchanged rules */
+
+.ast-view .code-style-editor tr.rule-changed td,
+.ast-view .code-style-editor tr.rule-changed td select { color: #ccc; }
+
+.ast-view .code-style-editor tr.rule-unchanged td,
+.ast-view .code-style-editor tr.rule-unchanged td select { color: #555; }
+
+
+
+/* header */
 
 .ast-view button { outline: none; }
 

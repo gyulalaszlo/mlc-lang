@@ -5,10 +5,12 @@ module AstView.CodeStyleEditor exposing (..)
 
 import CAst.CodeStyle exposing (CodeStyle, SideWs(..), IndentWs(..), Ws, defaultCodeStyle)
 import Dict
-import Html exposing (Html, div, small, span, td, text, th, tr)
-import Html.Attributes exposing (class, colspan)
+import Html exposing (Html, div, input, label, small, span, td, text, th, tr)
+import Html.Attributes exposing (class, colspan, type_, value)
 import Html.Events exposing (onInput)
 import List.Extra
+import Regex
+
 
 
 
@@ -55,7 +57,13 @@ subscriptions model =
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
-        Select k -> { model | selectedKey = Just k } ! []
+        Select k ->
+            { model
+                | selectedKey = case k of
+                        "" -> Nothing
+                        r -> Just k
+                } ! []
+
         SetSideIndent k s i ->
             { model | codeStyle = updateWs k (setSideIndent s i) model.codeStyle } ! []
         SetSideWs k s w ->
@@ -98,14 +106,38 @@ setSideIndent side w ws =
 view : Model -> Html Msg
 view model =
     div [ class "code-style-editor" ]
-        [ Html.table
+        [ div [class "code-style-header"]
+            [ input
+                [ type_ "text"
+                , value (Maybe.withDefault "" model.selectedKey)
+                , onInput (Select)
+                ] []
+            ]
+        , Html.table
             [ class "table table-code-style"]
             [ ruleHead
-            , Html.tbody [] <|
-                Dict.foldr (\k v m -> ruleView k v ++ m ) [] model.codeStyle
+            , ruleRows model
             ]
         ]
---        [ text <| toString model ]
+
+matchesSelection : Model -> String -> Bool
+matchesSelection model s =
+    case model.selectedKey of
+        Nothing -> True
+        Just k -> Regex.contains (Regex.regex k) s
+
+ruleRows : Model -> Html Msg
+ruleRows model =
+    Html.tbody [] <|
+        Dict.foldr
+            (\k v m ->
+                if matchesSelection model k
+                    then ruleView k v ++ m
+                    else m)
+            []
+            model.codeStyle
+
+
 
 ruleHead : Html Msg
 ruleHead =
@@ -122,7 +154,7 @@ ruleHead =
 ruleChanged : String -> Ws -> Bool
 ruleChanged k w =
     Dict.get k defaultCodeStyle
-        |> Maybe.map (\ww -> ww == w)
+        |> Maybe.map (\ww -> ww /= w)
         |> Maybe.withDefault True
 
 ruleView : String -> Ws -> List (Html Msg)
