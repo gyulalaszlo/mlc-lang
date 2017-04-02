@@ -3,12 +3,12 @@ module CAsm.CAsmSample exposing (..)
 |-}
 
 import CAsm.AstBuilder exposing (toAst, toFunction)
-import CAsm.AstPrinter exposing (applyCodeStyle, defaultCodeStyle, functionToString)
+import CAsm.AstPrinter exposing (functionToString)
+import CAsm.CodeStyle exposing (defaultCodeStyle, applyCodeStyle)
 import CAsm.CAsm exposing (..)
 import CAsm.Error exposing (errorToString)
 import CAsm.SymbolType exposing (..)
 import CAsm.DSL exposing (..)
-import Codegen.Indented exposing (applyIndents)
 import Html
 import Html.Attributes exposing (attribute, class)
 
@@ -92,15 +92,15 @@ main =
 css = Html.node "style" [Html.Attributes.type_ "text/css"]
           [Html.text """
 
-body, pre {  font-family: "Fira Code", Monaco, Courier New; font-size: 13px; }
+body, pre {  font-family: "Fira Code", Monaco, Courier New; font-size: 12px; }
 
 pre { line-heigth:1.2em; }
 
 
 .c-code { padding: 2em 0.5em; white-space: pre-wrap; background: #222220; color: #999; }
 
-.c-code .token { cursor: pointer; }
-.c-code .token:hover { border-width: 2px; border-style:solid; margin: -2px; }
+.c-code .token { cursor: pointer; border:none; }
+.c-code .token:hover { background: #444; border-radius: 2px; }
 .c-code .token-keyword { color: #c33; }
 .c-code .token-type { color: #39c; }
 .c-code .token-symbol { color: #7c7; }
@@ -120,5 +120,9 @@ pre { line-heigth:1.2em; }
 .c-code .token-whiteSpace:hover {  background: #333;  }
 
 
+.c-code .token-keyword:hover { background-color: #c33; color: #222; }
+.c-code .token-type:hover { background-color: #39c; color: #222; }
+.c-code .token-symbol:hover { background-color: #7c7; color: #222; }
+.c-code .token-functionName:hover { background-color: #5ca; color: #222; }
                   """
                   ]

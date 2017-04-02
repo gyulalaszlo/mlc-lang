@@ -1,7 +1,7 @@
 module CAsm.Error exposing (..)
 {-| Describe me please...
 |-}
-import Codegen.Indented exposing (Line(..), applyIndents, indentWith)
+import Indented exposing (Line(..), applyIndents, indentWith)
 
 type Error
     = Error { msg : String , children: List Error }

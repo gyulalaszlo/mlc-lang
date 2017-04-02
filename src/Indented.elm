@@ -1,4 +1,4 @@
-module Codegen.Indented exposing
+module Indented exposing
     ( Line(..), Token, TextTable
 
     , applyIndents, indentWith

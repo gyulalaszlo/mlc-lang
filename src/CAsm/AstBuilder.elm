@@ -8,7 +8,6 @@ import CAsm.Error as Error exposing (Error, wrapError)
 import CAsm.FlowGraph exposing (FlowPath(..), flowGraphFor, hasJumpTo, isBlockALoop, isJumpALoop, loopEdges, loopNodes)
 import CAsm.SymbolType as SymbolType exposing (BitWidth(..), SymbolType(..), bool, typeToString, unwrapPointer)
 import CAsm.CAst exposing (..)
-import Codegen.Indented exposing (Line(..), Token, line)
 import Dict
 import List.Extra
 
