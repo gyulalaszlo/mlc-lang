@@ -11,6 +11,7 @@ import CAst.AstPrinter exposing (Token, statementListToTokens)
 import CAst.CodeStyle exposing (CodeStyle, applyCodeStyle, defaultCodeStyle)
 import Html exposing (Html, div, pre, text)
 import Html.Attributes exposing (attribute, class)
+import Html.Events exposing (onClick)
 import Task
 
 type alias Code =
@@ -27,6 +28,7 @@ type alias Model =
     { code: Maybe Code
     , tokens: List Token
     , codeStyleEditor: CodeStyleEditor.Model
+    , codeStyleEditorShown: Bool
     }
 
 initialModel : Model
@@ -34,6 +36,7 @@ initialModel =
     { code = Nothing
     , tokens = []
     , codeStyleEditor = CodeStyleEditor.initialModel
+    , codeStyleEditorShown = False
     }
 
 
@@ -43,6 +46,8 @@ initialModel =
 type Msg
     = SetAssembly CAsm
     | CodeStyleEditorMsg CodeStyleEditor.Msg
+
+    | SetCodeStyleEditorShown Bool
 --    | OnCompileDone (Result Error StatementList)
 
 
@@ -65,7 +70,8 @@ update msg model =
             in
                 ({ model | codeStyleEditor = sm }, Cmd.map CodeStyleEditorMsg sc)
 
-
+        SetCodeStyleEditorShown s ->
+            { model | codeStyleEditorShown = s } ! []
 
 
 -- SUBSCRIPTIONS
@@ -82,8 +88,14 @@ subscriptions model =
 view : Model -> Html Msg
 view model =
     div [class "ast-view"]
-        [ codeView model
-        , Html.map CodeStyleEditorMsg <| CodeStyleEditor.view model.codeStyleEditor
+        [ headerView model
+        , codeView model
+        , if model.codeStyleEditorShown
+            then
+                Html.map CodeStyleEditorMsg <|
+                    CodeStyleEditor.view model.codeStyleEditor
+            else
+                Html.text ""
         ]
 
 codeView : Model -> Html Msg
@@ -96,7 +108,7 @@ codeView model =
                 ]
 
         Just {assembly, ast} ->
-            div [class "ast-view"]
+            div [class "code-view"]
                 [ astView model.codeStyleEditor.codeStyle ast
                 ]
 
@@ -126,6 +138,15 @@ astView codeStyle s =
         Err errors -> Html.pre [] [ Html.text <| errorToString errors]
 
 
+headerView : Model -> Html Msg
+headerView model =
+    div [class "ast-view-header"]
+        [ Html.button
+            [ onClick <|
+                SetCodeStyleEditorShown (not model.codeStyleEditorShown)]
+            [ text <| if model.codeStyleEditorShown then "Hide Code Style" else "Show Code Style"
+            ]
+        ]
 
 
 

@@ -6,7 +6,7 @@ module AstView.CodeStyleEditor exposing (..)
 import CAst.CodeStyle exposing (CodeStyle, SideWs(..), IndentWs(..), Ws, defaultCodeStyle)
 import Dict
 import Html exposing (Html, div, small, span, td, text, th, tr)
-import Html.Attributes exposing (class)
+import Html.Attributes exposing (class, colspan)
 import Html.Events exposing (onInput)
 import List.Extra
 
@@ -97,12 +97,12 @@ setSideIndent side w ws =
 
 view : Model -> Html Msg
 view model =
-    div [ class "" ]
+    div [ class "code-style-editor" ]
         [ Html.table
             [ class "table table-code-style"]
             [ ruleHead
             , Html.tbody [] <|
-                Dict.foldr (\k v m -> ruleView k v :: m ) [] model.codeStyle
+                Dict.foldr (\k v m -> ruleView k v ++ m ) [] model.codeStyle
             ]
         ]
 --        [ text <| toString model ]
@@ -119,16 +119,25 @@ ruleHead =
             ]
         ]
 
-ruleView : String -> Ws -> Html Msg
+ruleChanged : String -> Ws -> Bool
+ruleChanged k w =
+    Dict.get k defaultCodeStyle
+        |> Maybe.map (\ww -> ww == w)
+        |> Maybe.withDefault True
+
+ruleView : String -> Ws -> List (Html Msg)
 ruleView key ws =
-    tr [ class "code-style-rule"]
+    [ tr [ class <| "code-style-rule " ++ (if ruleChanged key ws then "rule-changed" else "rule-unchanged")]
        [ td [ class "ws ws-key"] [ text key ]
+--       ]
+--    , tr [ class "code-style-rule"]
        , td [class "side-ws indent-ws-left"] [ indentView key Left ws.indentLeft ]
        , td [class "side-ws side-ws-left"] [ sideWsView key Left ws.left ]
        , td [class "side-ws side-ws-right"] [ sideWsView key Right ws.right ]
        , td [class "side-ws indent-ws-right"] [ indentView key Right ws.indentRight ]
        ]
 
+    ]
 
 select : (a -> String) -> (a -> msg) -> a -> List a -> Html msg
 select f msg v vs =
@@ -147,9 +156,9 @@ select f msg v vs =
 sideWsToString : SideWs -> String
 sideWsToString w =
     case w of
-        Space -> "_ Space"
+        Space -> "_"
         NoSpace -> ""
-        LineBreak -> "⏎ Line"
+        LineBreak -> "⏎"
 
 sideWsView : String -> Side -> SideWs -> Html Msg
 sideWsView key side w =
@@ -160,8 +169,8 @@ sideWsView key side w =
 indentToString : IndentWs -> String
 indentToString w =
     case w of
-        Indent -> "In ->"
-        Outdent -> "<- Out"
+        Indent -> "->"
+        Outdent -> "<-"
         NoIndent -> ""
 
 
