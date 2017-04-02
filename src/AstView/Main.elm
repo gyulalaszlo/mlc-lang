@@ -3,6 +3,7 @@ module AstView.Main exposing (..)
 |-}
 
 import AstView.CodeStyleEditor as CodeStyleEditor
+import AstView.AsmView as AsmView
 import CAsm exposing (CAsm)
 import CAsm.Error as Error exposing (Error, errorToString)
 import CAst exposing (StatementList)
@@ -29,6 +30,9 @@ type alias Model =
     , tokens: List Token
     , codeStyleEditor: CodeStyleEditor.Model
     , codeStyleEditorShown: Bool
+
+    , asmView: AsmView.Model
+    , asmViewShown: Bool
     }
 
 initialModel : Model
@@ -37,6 +41,9 @@ initialModel =
     , tokens = []
     , codeStyleEditor = CodeStyleEditor.initialModel
     , codeStyleEditorShown = False
+
+    , asmView = AsmView.initialModel
+    , asmViewShown = False
     }
 
 
@@ -49,6 +56,9 @@ type Msg
 
     | SetCodeStyleEditorShown Bool
     | SelectTokenTag String
+
+    | AsmViewMsg AsmView.Msg
+    | SetAsmViewShown Bool
 --    | OnCompileDone (Result Error StatementList)
 
 
@@ -83,6 +93,15 @@ update msg model =
                     , codeStyleEditorShown = (s /= "")
                     }
                 , Cmd.map CodeStyleEditorMsg sc)
+
+        AsmViewMsg m ->
+            let
+                (sm, sc) = AsmView.update m model.asmView
+            in
+                ({ model | asmView = sm }, Cmd.map AsmViewMsg sc)
+
+        SetAsmViewShown s ->
+            { model | asmViewShown = s } ! []
 
 
 
@@ -122,7 +141,14 @@ codeView model =
 
         Just {assembly, ast} ->
             div [class "code-view"]
-                [ astView model.codeStyleEditor.codeStyle ast
+                [ text ""
+                , if model.asmViewShown
+                        then
+                            Html.map AsmViewMsg <|
+                                AsmView.view model.asmView assembly
+                        else
+                            text ""
+                , astView model.codeStyleEditor.codeStyle ast
                 ]
 
 
@@ -152,15 +178,26 @@ astView codeStyle s =
         Err errors -> Html.pre [] [ Html.text <| errorToString errors]
 
 
+
+-- HEADER VIEW
+
+
 headerView : Model -> Html Msg
 headerView model =
     div [class "ast-view-header"]
-        [ Html.button
-            [ onClick <|
-                SetCodeStyleEditorShown (not model.codeStyleEditorShown)]
-            [ text <| if model.codeStyleEditorShown then "Hide Code Style" else "Show Code Style"
-            ]
+        [ showButton "Code Style" SetCodeStyleEditorShown model.codeStyleEditorShown
+        , showButton "Assembly" SetAsmViewShown model.asmViewShown
         ]
+
+
+
+showButton : String -> (Bool -> msg) -> Bool -> Html msg
+showButton label msg v =
+    Html.button
+        [ onClick <| msg (not v)]
+        [ text <| if v then "Hide " ++ label else "Show " ++ label
+        ]
+
 
 
 

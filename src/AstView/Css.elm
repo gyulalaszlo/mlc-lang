@@ -15,13 +15,14 @@ cssBody : String
 cssBody = """
 
 
-.ast-view { font-family: Arial, Verdana, sans-serif; }
+.ast-view { font-family: Arial, Verdana, sans-serif; padding:0; margin:0; }
 .ast-view { background: #111110; color: #999;}
+
 
 .ast-view code,
 .ast-view pre { font-family: "Fira Code", Monaco, Courier New; font-size: 12px; }
 
-.ast-view code { padding: 0 0 0 2em; display:block }
+.ast-view code { padding: 32px 0 0 2em; display:block }
 .ast-view pre { line-heigth:1.2em; position:relative; }
 
 .ast-view .c-code {  white-space: pre-wrap; background: #222220; padding: 1em; margin:0; }
@@ -60,7 +61,8 @@ cssBody = """
 
 
 .ast-view { position:absolute; overflow:hidden; height:100%; width:100%; }
-.ast-view .code-view {  }
+
+.ast-view .code-view { width:100%; height:100%; position:absolute; top: 0; left: 0; overflow-y: scroll; }
 .ast-view .code-style-editor { background: #111; border-left: 1px solid #333; position: absolute; right: 0; top:0;   height: 100%; overflow-y: scroll; padding: 0 1em; box-shadow: -5px 0 10px rgba(0,0,0,0.5); min-width: 400px; }
 
 /* code-style editor */
@@ -89,6 +91,16 @@ cssBody = """
 /* header */
 
 .ast-view button { outline: none; }
+.ast-view-header { z-index: 999; position: absolute; }
 
+
+/* Scrollbar styles */
+::-webkit-scrollbar { width: 12px; height: 12px; }
+
+::-webkit-scrollbar-track { background: none; border-radius: 10px; }
+
+::-webkit-scrollbar-thumb { border-radius: 10px; background: rgba(255,255,255,0.1);  }
+
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.1);  }
 
 """
