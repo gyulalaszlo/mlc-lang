@@ -12,6 +12,7 @@ module CAsm.SymbolType exposing
     , bool
 
     , unwrapPointer
+    , concat
     )
 {-| Symbol types
 |-}
@@ -38,6 +39,8 @@ type SymbolType
     | Constant SymbolType
     | Parametric ParametricType
     | Void
+    | IntegerLiteral
+    | FloatLiteral
 
 type BitWidth
     = Bits64
@@ -135,6 +138,8 @@ typeToString t =
             String.join ":" <|
                 t.name :: List.map typeToString t.args
 
+        IntegerLiteral -> "<Type:IntegerLiteral>"
+        FloatLiteral -> "<Type:FloatLiteral>"
 
         Void ->
             "Void"
@@ -158,6 +163,24 @@ bool = i1
 
 char = Signed BitsChar
 str = Constant <| Pointer char
+
+
+{-| Returns true if two types can be considered equal, while considering
+free-form constants.
+-}
+concat : SymbolType -> SymbolType -> Maybe SymbolType
+concat a b =
+    case (a,b) of
+        (Signed aa, Signed bb) -> if aa == bb then Just a else Nothing
+        (Unsigned aa, Unsigned bb) -> if aa == bb then Just a else Nothing
+        (Signed Bits1, Unsigned Bits1) -> Just bool
+        (Signed _, IntegerLiteral) -> Just a
+        (Unsigned _, IntegerLiteral) -> Just a
+        (IntegerLiteral, Signed _) -> Just b
+        (IntegerLiteral, Unsigned _) -> Just b
+        (IntegerLiteral, IntegerLiteral) -> Just a
+        _ -> Nothing
+
 
 
 {-| Returns `Just` the pointed to types for the inner types
@@ -237,6 +260,9 @@ typeToCCode t =
 
         Pointer p ->
             typeToCCode p ++ "*"
+
+        IntegerLiteral -> "<Type:IntegerLiteral>"
+        FloatLiteral -> "<Type:FloatLiteral>"
 
         Void ->
             "void"

@@ -46,7 +46,7 @@ sample =
             [ let_ current (builtin "U8" "at", [s, i])
             , let_ match (builtin "U8" "eq", [current, ch])
             , let_ c1 (builtin "U64" "from-const", [c1])
-            , let_ next (builtin "U8" "plus", [i, c1])
+            , let_ next (builtin "U64" "plus", [i, c1])
             , branch match.name "loop.done" "loop.pre"
             ]
 

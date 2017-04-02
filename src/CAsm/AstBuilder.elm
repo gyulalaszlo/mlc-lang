@@ -6,7 +6,7 @@ module CAsm.AstBuilder exposing (toAst)
 import CAsm.CAsm exposing (..)
 import CAsm.Error as Error exposing (Error, wrapError)
 import CAsm.FlowGraph exposing (FlowPath(..), flowGraphFor, hasJumpTo, isBlockALoop, isJumpALoop, loopEdges, loopNodes)
-import CAsm.SymbolType exposing (BitWidth(..), SymbolType(..), bool, typeToString, unwrapPointer)
+import CAsm.SymbolType as SymbolType exposing (BitWidth(..), SymbolType(..), bool, typeToString, unwrapPointer)
 import CAsm.CAst exposing (..)
 import Codegen.Indented exposing (Line(..), Token, line)
 import Dict
@@ -18,13 +18,6 @@ import List.Extra
 toAst : CAsm -> Result Error StatementList
 toAst c =
     let
---        assignTo sym =
---            [ typeToCCode sym.type_ , sym.name ] |> String.join " "
---        header =
---            List.map assignTo c.parameters
---                |> List.intersperse ", "
---                |> paren
---                |> (::) c.name
 
         isHead : (a -> Bool) -> List a -> Bool
         isHead pred xs =
@@ -41,22 +34,7 @@ toAst c =
         visibleBlocks c.blocks
             |> List.map (blockToCode c)
             |> Error.wrapErrors ("Error while compiling blocks for Assembly:" ++ toString c.name)
-            |> Debug.log "hi"
             |> Result.map (\bs -> header ++ (List.concat bs))
---        List.concat
---            [ [ SComment <| flowPathsAsComment c]
---            , symbolsUsed c
---            ]
---        List.concat
---            [ [ line header, Text "{", Indent ]
---            , [ Empty ]
---            , flowPathsAsComment c
---            , [ Empty ]
---            , symbolsUsed c
---            , [ Empty ]
---            , List.concatMap (blockToCode c) <| visibleBlocks c.blocks
---            , [ Outdent, Text "}" ]
---            ]
 
 
 {-| Converts a single block to C code with labels, indentation and instructions
@@ -254,32 +232,25 @@ functionCall c label f a =
             findBy .name f c.calls
                 |> Result.fromMaybe (Error.make <| "Cannot find function" ++ f.name)
 
-        callInner n =
+        callArgs n =
             List.map inline a
                 |> Error.wrapErrors ("While resolving call args for: " ++ n)
                 |> Result.map (ExprFunctionCall n)
 
         call n =
-            lookupFunction f
-                |> Result.map2
-                    (\inner {returnType} -> makeExpression returnType inner)
-                    (callInner n)
+            Result.map2
+                (\inner {returnType} -> makeExpression returnType inner)
+                (callArgs n)
+                (lookupFunction f)
 
         binary t o l r =
             Result.map2 (makeBinary t o) (inline l) (inline r)
 
         constant n =
             findConstant n c
-                |> Result.map (\(_,val) -> makeLiteral bool val)
+                |> Result.map (\(_,val) -> makeLiteral IntegerLiteral val)
 
-
-        -- for math binaries pick the left type for now
-        -- TODO: Result String Expression
-        binaryMath o l r =
-            let ll = inline l
-                rr = inline r
-            in
-                Result.map2 (\ll rr -> makeBinary ll.meta.returns o ll rr) ll rr
+        binaryMath = binaryMathOp c label
     in
         case f.package of
             Pkg pkg -> call <| pkg ++ "_" ++ f.name
@@ -307,6 +278,32 @@ functionCall c label f a =
                     ("from-const", [r]) -> constant r
                     _ -> call <| pkg ++ "_" ++ f.name
 
+
+{-| Builds a binary math expression and does basic type checking using SymbolType.concat
+-}
+binaryMathOp : CAsm -> LabelName -> BinaryOp -> SymbolName -> SymbolName -> Result Error Expression
+binaryMathOp c from o l r =
+    let
+        inline = inlineArgs c from
+        ll = inline l
+        rr = inline r
+        typesMatch ll rr =
+            SymbolType.concat ll.meta.returns rr.meta.returns
+        typeMatchErr ll rr =
+            Error.make <| String.join " " <|
+                [ "Types for", toString o, "do not match."
+                , "| left:", typeToString ll.meta.returns
+                , "| right:", typeToString rr.meta.returns
+                ]
+    in
+        Result.map2 (\ll rr -> (ll,rr)) ll rr
+            |> Result.andThen
+                (\(ll,rr)->
+                    typesMatch ll rr
+                        |> Result.fromMaybe (typeMatchErr ll rr)
+                        |> Result.map (\tt -> (tt,ll,rr))
+                    )
+            |> Result.map (\(tt,ll,rr)-> makeBinary tt o ll rr)
 
 
 isAConditionalLoop : CAsm -> Blk -> Bool
@@ -383,7 +380,7 @@ lets c ln ls =
                 RValue -> letRValue c ln l
     in
         List.map aLet ls
-            |> Error.wrapErrors ("Error while looking up lets for label " ++ toString ln ++ "")
+            |> Error.wrapErrors ("While looking up lets for label " ++ toString ln ++ "")
 
 
 letLValue : CAsm -> LabelName -> Let -> Result Error Statement
