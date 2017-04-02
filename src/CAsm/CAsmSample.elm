@@ -10,7 +10,7 @@ import CAsm.SymbolType exposing (..)
 import CAsm.DSL exposing (..)
 import Codegen.Indented exposing (applyIndents)
 import Html
-import Html.Attributes exposing (class)
+import Html.Attributes exposing (attribute, class)
 
 sample =
     let
@@ -64,7 +64,10 @@ sample =
 tokenList ts =
     List.map
         (\{class, text, tag} -> Html.span
-            [Html.Attributes.class ("token token-" ++ class ++ " " ++ class ++ " " ++ tag)]
+            [Html.Attributes.class ("token token-" ++ class ++ " " ++ class)
+            , attribute "data-tag" tag
+            , attribute "data-class" class
+            ]
             [Html.text text] )
         ts
 
@@ -89,12 +92,15 @@ main =
 css = Html.node "style" [Html.Attributes.type_ "text/css"]
           [Html.text """
 
-body {  font-family: "Fira Code", Monaco, Courier New; font-size: 13px; }
+body, pre {  font-family: "Fira Code", Monaco, Courier New; font-size: 13px; }
+
+pre { line-heigth:1.2em; }
 
 
-.c-code { padding: 2em 0.5em; white-space: pre-wrap; background: #222; color: #999; }
+.c-code { padding: 2em 0.5em; white-space: pre-wrap; background: #222220; color: #999; }
 
-.c-code .token { }
+.c-code .token { cursor: pointer; }
+.c-code .token:hover { border-width: 2px; border-style:solid; margin: -2px; }
 .c-code .token-keyword { color: #c33; }
 .c-code .token-type { color: #39c; }
 .c-code .token-symbol { color: #7c7; }
@@ -106,6 +112,12 @@ body {  font-family: "Fira Code", Monaco, Courier New; font-size: 13px; }
 .c-code .token-assign { color: #c90; }
 .c-code .token-literal { color: #c09; }
 .c-code .token-functionName { color: #5ca; }
+
+.c-code .token-line-break { color: #3c3c3c; }
+.c-code .token-line-break:before { content: "⏎"; }
+
+.c-code .token-whiteSpace {  background: #222;  }
+.c-code .token-whiteSpace:hover {  background: #333;  }
 
 
                   """

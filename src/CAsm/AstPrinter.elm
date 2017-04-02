@@ -16,19 +16,56 @@ type SideWs
     | Space
     | LineBreak
 
+type WsIndent
+    = Indent
+    | Outdent
+    | NoIndent
+
 type alias Ws =
     { left: SideWs
     , right: SideWs
+    , indentLeft: WsIndent
+    , indentRight: WsIndent
     }
 
-noSpace = { left = NoSpace, right = NoSpace }
-spaceLeft = { left = Space, right = NoSpace }
-spaceRight = { left = NoSpace, right = Space }
-spaceBoth = { left = Space, right = Space }
+emptyWs : Ws
+emptyWs = { left = NoSpace, right = NoSpace, indentLeft = NoIndent, indentRight = NoIndent }
 
-breakBefore = { left = LineBreak, right = NoSpace }
-breakAfter = { left = NoSpace, right = LineBreak }
-breakBoth = { left = LineBreak, right = LineBreak }
+noSpace : Ws
+noSpace = emptyWs
+
+spaceLeft : Ws
+spaceLeft = { emptyWs | left = Space }
+
+spaceRight : Ws
+spaceRight = { emptyWs | right = Space }
+
+spaceBoth : Ws
+spaceBoth = { emptyWs | left = Space, right = Space }
+
+breakBefore : Ws
+breakBefore = {  emptyWs |left = LineBreak}
+
+breakAfter : Ws
+breakAfter = { emptyWs |  right = LineBreak }
+
+breakBoth : Ws
+breakBoth = { emptyWs | left = LineBreak, right = LineBreak }
+
+indentBefore : Ws
+indentBefore = { emptyWs | left = LineBreak, indentLeft = Indent}
+
+indentAfter : Ws
+indentAfter = { emptyWs |  indentRight = Indent }
+
+outdentBefore : Ws
+outdentBefore = { emptyWs | indentLeft = Outdent, left = LineBreak}
+
+outdentAfter : Ws
+outdentAfter = { emptyWs |  indentRight = Outdent }
+
+blockOpen = { emptyWs | left = Space, right = LineBreak, indentRight = Indent }
+blockClose = { emptyWs | indentLeft = Outdent, left = LineBreak, right = LineBreak }
 
 type alias CodeStyle = Dict String Ws
 
@@ -42,15 +79,15 @@ defaultCodeStyle =
         , ("function.arg.type", noSpace)
         , ("function.arg.name", spaceLeft)
         , ("function.arg.colon", spaceRight)
-        , ("function.braces.open", breakAfter)
-        , ("function.braces.close", breakAfter)
+        , ("function.braces.open", blockOpen)
+        , ("function.braces.close", blockClose)
 
         , ("while.paren.open", noSpace)
         , ("while.paren.close", noSpace)
-        , ("while.braces.open", breakAfter)
-        , ("while.braces.close", breakAfter)
+        , ("while.braces.open", blockOpen)
+        , ("while.braces.close", blockClose)
 
-        , ("comment.block", breakBoth)
+        , ("comment.block", breakAfter)
 
         , ("declare.type", noSpace)
         , ("declare.name", spaceLeft)
@@ -74,10 +111,10 @@ defaultCodeStyle =
 
         , ("if.paren.open", noSpace)
         , ("if.paren.close", noSpace)
-        , ("if.then.braces.open", breakAfter)
-        , ("if.then.braces.close", noSpace)
-        , ("if.else.braces.open", breakAfter)
-        , ("if.else.braces.close", breakAfter)
+        , ("if.then.braces.open", blockOpen)
+        , ("if.then.braces.close", outdentBefore)
+        , ("if.else.braces.open", blockOpen)
+        , ("if.else.braces.close", blockClose)
         , ("if.else.keyword", spaceBoth)
         , ("if.keyword", spaceRight)
 
@@ -90,63 +127,49 @@ defaultCodeStyle =
         , ("return.semi", breakAfter)
         ]
 
---type alias CodeLayout =
---    { function:
---        { name: Ws
---        , returns: Ws
---        , openParen: Ws
---        , closeParen: Ws
---        , argColon: Ws
---        , argType: Ws
---        , argName: Ws
---        }
---    , comment: Ws
---    , declare: { type_: Ws, name: Ws, semi: Ws }
---    , assign: { name: Ws, expr: Ws, semi: Ws }
---    , return: { keyword: Ws, expr: Ws, semi: Ws }
---    , continue: { keyword: Ws, semi: Ws }
---    }
 
-ws : String -> Token -> List Token
-ws w t = wss w [t]
 
 wss : String -> List Token -> List Token
 wss w ts = List.map (\t -> { t | tag = w }) ts
 
-applyWs : Ws -> Token -> List Token
-applyWs {left, right} t =
-    List.concat [sideWs left, [t], sideWs right]
+applyWs : Int -> Int -> Ws -> Token -> List Token
+applyWs indentL indentR {left, right} t =
+    List.concat [sideWs indentL t.tag left, [t], sideWs indentR t.tag right]
 
-sideWs : SideWs -> List Token
-sideWs w =
-    case w of
+sideWs : Int -> String -> SideWs -> List Token
+sideWs indent tag w =
+    let indentStr = String.repeat indent "\t"
+    in case w of
         NoSpace -> []
-        Space -> [whiteSpaceToken "" " "]
-        LineBreak -> [whiteSpaceToken "" "\n"]
+        Space -> [whiteSpaceToken tag " "]
+        LineBreak -> [{ lineBreakToken | tag = tag }, whiteSpaceToken tag <| indentStr ]
 
 
 applyCodeStyle : CodeStyle -> List Token -> List Token
 applyCodeStyle cs ts =
-    let tokenWs {tag} = Dict.get tag cs |> Maybe.withDefault spaceRight
-    in List.concatMap (\t -> applyWs (tokenWs t) <| t) ts
+    List.foldl (applyCodeStyleHelepr cs) (0,[]) ts
+        |> Tuple.second
 
---defaultCodeLayout : CodeLayout
---defaultCodeLayout =
---    { function =    { name = spaceLeft
---                    , returns = noSpace
---                    , openParen = spaceRight
---                    , closeParen = spaceBoth
---                    , argColon = spaceRight
---                    , argType = noSpace
---                    , argName = spaceLeft
---                    , braces = { open = breakAfter, close = breakAfter}
---                    }
---    , comment = breakBoth
---    , declare = { type_ = noSpace, name = spaceLeft, semi = breakAfter }
---    , assign = { name = spaceRight, expr = spaceLeft, semi = breakAfter }
---    , return = { keyword = noSpace, expr = spaceLeft, semi = breakAfter }
---    , continue = { keyword = noSpace, semi = breakAfter }
---    }
+applyCodeStyleHelepr : CodeStyle -> Token -> (Int, List Token) -> (Int, List Token)
+applyCodeStyleHelepr cs t (indent, ts) =
+    let
+        tokenWs = Dict.get t.tag cs |> Maybe.withDefault spaceRight
+        (indentL, indentR) =
+            case (tokenWs.indentLeft, tokenWs.indentRight) of
+                (Indent, Indent) -> (indent + 1, indent + 2)
+                (Indent, Outdent) -> (indent + 1, indent)
+                (Outdent, Indent) -> (max 0 <| indent - 1, indent)
+                (Outdent, Outdent) -> (max 0 <| indent - 1, max 0 <| indent - 2)
+                (Indent, NoIndent) -> (indent + 1, indent + 1)
+                (Outdent, NoIndent) -> (max 0 <| indent - 1, max 0 <| indent - 1)
+                (NoIndent, Indent) -> (indent, indent + 1)
+                (NoIndent, Outdent) -> (indent, max 0 <| indent - 1)
+                (NoIndent, NoIndent) -> (indent, indent)
+
+    in
+        ( indentR
+        , ts ++ applyWs indentL indentR tokenWs t
+        )
 
 
 functionToString :  FunctionStatement -> List Token
@@ -172,9 +195,6 @@ functionToString f =
         fnHead ++ (bracedStatementList "function.braces" f.body)
 
 
-
---astToString : StatementList -> List Token
---astToString = statementListToString
 
 
 statementListToString :  StatementList -> List Token
@@ -236,7 +256,7 @@ statementToString s =
         SReturn e ->
             List.concat
                 [ [ keywordToken "return.keyword" "return" ]
-                , wss "return.expr" <| expression e
+                , expression e
                 , [ semiToken "return.semi" ";" ]
                 ]
 
@@ -277,7 +297,6 @@ expressionBody e =
 
         ExprLiteral { text } -> [ literalToken "literal" text]
 
---        _ -> []
 
 
 
@@ -302,7 +321,6 @@ binaryOpToString  operator left right =
         CompGt -> mid ">"
         CompEq -> mid "=="
         CompNeq -> mid "!="
---        _ ->  []
 
 
 
@@ -327,6 +345,9 @@ commentToken = token "comment"
 keywordToken = token "keyword"
 literalToken = token "literal"
 whiteSpaceToken = token "whiteSpace"
+lineBreakToken = token "line-break" "" "\n"
+indentToken = token "indent" "" ""
+outdentToken = token "outdent" "" ""
 
 
 
