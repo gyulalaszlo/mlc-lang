@@ -2,6 +2,7 @@ module AstView.Main exposing (..)
 {-| Describe me please...
 |-}
 
+import AstView.CodeStyleEditor as CodeStyleEditor
 import CAsm exposing (CAsm)
 import CAsm.Error as Error exposing (Error, errorToString)
 import CAst exposing (StatementList)
@@ -25,12 +26,14 @@ type alias Code =
 type alias Model =
     { code: Maybe Code
     , tokens: List Token
+    , codeStyleEditor: CodeStyleEditor.Model
     }
 
 initialModel : Model
 initialModel =
     { code = Nothing
     , tokens = []
+    , codeStyleEditor = CodeStyleEditor.initialModel
     }
 
 
@@ -39,6 +42,7 @@ initialModel =
 
 type Msg
     = SetAssembly CAsm
+    | CodeStyleEditorMsg CodeStyleEditor.Msg
 --    | OnCompileDone (Result Error StatementList)
 
 
@@ -55,6 +59,13 @@ update msg model =
                          , ast = toAst a }
                 } ! []
 
+        CodeStyleEditorMsg m ->
+            let
+                (sm, sc) = CodeStyleEditor.update m model.codeStyleEditor
+            in
+                ({ model | codeStyleEditor = sm }, Cmd.map CodeStyleEditorMsg sc)
+
+
 
 
 -- SUBSCRIPTIONS
@@ -70,6 +81,13 @@ subscriptions model =
 
 view : Model -> Html Msg
 view model =
+    div [class "ast-view"]
+        [ codeView model
+        , Html.map CodeStyleEditorMsg <| CodeStyleEditor.view model.codeStyleEditor
+        ]
+
+codeView : Model -> Html Msg
+codeView model =
     case model.code of
         Nothing ->
             div
@@ -81,6 +99,8 @@ view model =
             div [class "ast-view"]
                 [ astView ast
                 ]
+
+
 
 tokenList : List Token -> List (Html Msg)
 tokenList ts =

@@ -1,5 +1,5 @@
 module CAst.CodeStyle exposing
-    ( defaultCodeStyle, applyCodeStyle
+    ( defaultCodeStyle, applyCodeStyle, CodeStyle, Ws, SideWs(..), WsIndent(..)
 
     )
 {-| Describe me please...
