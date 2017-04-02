@@ -7,9 +7,14 @@ import CAsm.CAsm exposing (..)
 import CAsm.SymbolType exposing (SymbolType)
 
 
-type alias StatementList =
-    List Statement
+type alias FunctionStatement =
+    { name : String
+    , args: List (SymbolName, SymbolType)
+    , returns: SymbolType
+    , body: StatementList
+    }
 
+type alias StatementList = List Statement
 
 type Statement
     = SWhile WhileStatement

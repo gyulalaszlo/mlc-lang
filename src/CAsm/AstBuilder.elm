@@ -1,4 +1,4 @@
-module CAsm.AstBuilder exposing (toAst)
+module CAsm.AstBuilder exposing (toAst, toFunction)
 {-| Describe me please...
 |-}
 
@@ -12,6 +12,14 @@ import Codegen.Indented exposing (Line(..), Token, line)
 import Dict
 import List.Extra
 
+
+toFunction : CAsm -> StatementList -> FunctionStatement
+toFunction c sl =
+    { name = c.name
+    , args = List.map (\{name, type_} -> (name, type_)) c.parameters
+    , returns = c.returnType
+    , body = sl
+    }
 
 {-| Converts a CAsm assembly to C Code
 |-}

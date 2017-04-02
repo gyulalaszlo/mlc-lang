@@ -268,4 +268,4 @@ typeToCCode t =
             "void"
 
         Parametric t ->
-           String.join "_" <| (::) t.name <| List.map typeToCCode t.args
+           String.join "_" <| (::) t.name <| List.map typeToString t.args

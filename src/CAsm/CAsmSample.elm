@@ -2,8 +2,8 @@ module CAsm.CAsmSample exposing (..)
 {-| Sample for generating a simple expression block
 |-}
 
-import CAsm.AstBuilder exposing (toAst)
-import CAsm.AstPrinter exposing (astToString)
+import CAsm.AstBuilder exposing (toAst, toFunction)
+import CAsm.AstPrinter exposing (astToString, functionToString)
 import CAsm.CAsm exposing (..)
 import CAsm.Error exposing (errorToString)
 import CAsm.SymbolType exposing (..)
@@ -57,15 +57,15 @@ sample =
             , return retval.name
             ]
 
-        <| withNameAndParams "indexOfStr" [ch, s]
+        <| withNameAndParams "indexOfStr" [ch, s] (Parametric (ParametricType "Maybe" [u64]))
 
 
 astView s =
     case toAst s of
         Ok ast -> Html.code []
-                [ Html.pre [] [ Html.text <| astToString ast]
+                [ Html.pre [] [ Html.text <| functionToString <| toFunction s ast]
                 , Html.hr [] []
-                , Html.text <| toString ast
+--                , Html.text <| toString ast
                 ]
         Err errors -> Html.pre [] [ Html.text <| errorToString errors]
 
@@ -76,9 +76,9 @@ main =
         , Html.hr [] []
 --        , Html.code [] [ Html.text <| toString <| toAst sample ]
         , Html.hr [] []
-        , Html.pre [] [ Html.text <| String.join "\n" <| applyIndents <| toCCode sample ]
-        , Html.hr [] []
+--        , Html.pre [] [ Html.text <| String.join "\n" <| applyIndents <| toCCode sample ]
+--        , Html.hr [] []
         , Html.pre [] [ Html.text <| prettyPrint sample ]
-        , Html.hr [] []
-        , Html.code [] [ Html.text <| toString sample ]
+--        , Html.hr [] []
+--        , Html.code [] [ Html.text <| toString sample ]
         ]

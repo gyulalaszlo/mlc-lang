@@ -1,10 +1,32 @@
-module CAsm.AstPrinter exposing (astToString)
+module CAsm.AstPrinter exposing (astToString, functionToString)
 {-| Describe me please...
 |-}
 
 import CAsm.CAst exposing (..)
 import CAsm.SymbolType exposing (typeToCCode)
 import Codegen.Indented exposing (Line(..), Token, applyIndents)
+
+functionToString : FunctionStatement -> String
+functionToString f =
+    let
+        fnHead =
+            tokens <|
+                List.concat <|
+                    [   [ typeToken (typeToCCode f.returns)
+                        , functionNameToken f.name
+                        , parenToken "("
+                        ]
+                    ,   List.map (\(n,t)-> [typeToken (typeToCCode t), symbolToken n]) f.args
+                            |> List.intersperse [colonToken]
+                            |> List.concat
+                    ,   [ parenToken ")" ]
+                    ]
+    in
+        fnHead :: (bracedStatementList f.body)
+            |> applyIndents
+            |> String.join "\n"
+
+
 
 astToString : StatementList -> String
 astToString s =

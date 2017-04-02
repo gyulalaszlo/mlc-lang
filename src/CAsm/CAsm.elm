@@ -117,9 +117,9 @@ empty =
     }
 
 
-withNameAndParams : String -> List Sym -> CAsm
-withNameAndParams n args =
-    { empty | name = n, parameters = args }
+withNameAndParams : String -> List Sym -> SymbolType-> CAsm
+withNameAndParams n args t =
+    { empty | name = n, parameters = args, returnType = t }
 
 {-| Returns the next node after b if there is any.
 |-}
