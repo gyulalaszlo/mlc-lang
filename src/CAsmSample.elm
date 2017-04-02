@@ -2,14 +2,15 @@ module CAsmSample exposing (..)
 {-| Sample for generating a simple expression block
 |-}
 
+import AstView.Main
 import CAst.AstBuilder exposing (toAst, toAst)
-import CAst.AstPrinter exposing (functionToString, statementListToString)
+import CAst.AstPrinter exposing (functionToString, statementListToTokens)
 import CAst.CodeStyle exposing (defaultCodeStyle, applyCodeStyle)
 import CAsm exposing (..)
 import CAsm.Error exposing (errorToString)
 import CAsm.SymbolType exposing (..)
 import CAsm.DSL exposing (..)
-import Html
+import Html exposing (program)
 import Html.Attributes exposing (attribute, class)
 
 sample =
@@ -77,7 +78,7 @@ astView s =
                 [ Html.pre [class "c-code"]
                     <| tokenList
                     <| applyCodeStyle defaultCodeStyle
-                    <| statementListToString ast
+                    <| statementListToTokens ast
                 , Html.hr [] []
 --                , Html.text <| toString ast
                 ]
@@ -91,6 +92,7 @@ main =
         , Html.hr [] []
         , Html.pre [] [ Html.text <| prettyPrint sample ]
         ]
+
 
 css = Html.node "style" [Html.Attributes.type_ "text/css"]
           [Html.text """

@@ -1,5 +1,5 @@
 module CAst.AstPrinter exposing
-    ( statementListToString, functionToString, Token
+    ( statementListToTokens, functionToString, Token
 
     )
 {-| Describe me please...
@@ -39,9 +39,9 @@ functionToString f =
 
 
 
-statementListToString :  StatementList -> List Token
-statementListToString s =
-    List.concatMap statementToString s
+statementListToTokens :  StatementList -> List Token
+statementListToTokens s =
+    List.concatMap statementToTokens s
 
 
 prefixedParen : String -> Expression -> List Token
@@ -58,13 +58,13 @@ bracedStatementList : String -> StatementList -> List Token
 bracedStatementList baseScope ss =
     List.concat
         [ [ braceToken (baseScope ++ ".open") "{" ]
-        , statementListToString ss
+        , statementListToTokens ss
         , [braceToken (baseScope ++ ".close") "}" ]
         ]
 
 
-statementToString : Statement -> List Token
-statementToString s =
+statementToTokens : Statement -> List Token
+statementToTokens s =
     case s of
 
         SComment c ->
