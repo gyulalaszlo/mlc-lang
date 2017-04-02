@@ -7,7 +7,7 @@ import CAst.CodeStyle exposing (CodeStyle, SideWs(..), IndentWs(..), Ws, default
 import Dict
 import Html exposing (Html, div, input, label, small, span, td, text, th, tr)
 import Html.Attributes exposing (class, colspan, type_, value)
-import Html.Events exposing (onInput)
+import Html.Events exposing (onClick, onInput)
 import List.Extra
 import Regex
 
@@ -85,19 +85,6 @@ setSideIndent side w ws =
     case side of
         Left -> { ws | indentLeft = w }
         Right -> { ws | indentRight = w }
---
---setSide : (Ws -> (a,a)) -> String -> String  -> a -> CodeStyle -> CodeStyle
---setSide getSides key side val cs =
---    let
---        ws = Dict.get key cs
---            |> Maybe.map (\ws -> getSides ws |> sideWs side)
---
---        sideWs side (left,right) =
---            case side of
---                "left" -> left
---                _ -> right
---    in
-
 
 
 -- VIEW
@@ -106,19 +93,36 @@ setSideIndent side w ws =
 view : Model -> Html Msg
 view model =
     div [ class "code-style-editor" ]
-        [ div [class "code-style-header"]
-            [ input
-                [ type_ "text"
-                , value (Maybe.withDefault "" model.selectedKey)
-                , onInput (Select)
-                ] []
-            ]
+        [ header model
         , Html.table
             [ class "table table-code-style"]
             [ ruleHead
             , ruleRows model
             ]
         ]
+
+header : Model -> Html Msg
+header model =
+     div [class "code-style-header"]
+        [ input
+            [ type_ "text"
+            , value (Maybe.withDefault "" model.selectedKey)
+            , onInput (Select)
+            ] []
+        , if model.selectedKey == Nothing
+            then text ""
+            else Html.button
+                [ onClick (Select "")]
+                [ text "Clear" ]
+        ]
+
+
+
+{-
+    RULE EDITOR
+-}
+
+
 
 matchesSelection : Model -> String -> Bool
 matchesSelection model s =
@@ -151,24 +155,25 @@ ruleHead =
             ]
         ]
 
+
+
 ruleChanged : String -> Ws -> Bool
 ruleChanged k w =
     Dict.get k defaultCodeStyle
         |> Maybe.map (\ww -> ww /= w)
         |> Maybe.withDefault True
 
+
+
 ruleView : String -> Ws -> List (Html Msg)
 ruleView key ws =
     [ tr [ class <| "code-style-rule " ++ (if ruleChanged key ws then "rule-changed" else "rule-unchanged")]
        [ td [ class "ws ws-key"] [ text key ]
---       ]
---    , tr [ class "code-style-rule"]
        , td [class "side-ws indent-ws-left"] [ indentView key Left ws.indentLeft ]
        , td [class "side-ws side-ws-left"] [ sideWsView key Left ws.left ]
        , td [class "side-ws side-ws-right"] [ sideWsView key Right ws.right ]
        , td [class "side-ws indent-ws-right"] [ indentView key Right ws.indentRight ]
        ]
-
     ]
 
 select : (a -> String) -> (a -> msg) -> a -> List a -> Html msg
@@ -185,6 +190,14 @@ select f msg v vs =
                         [ text <| f o ])
                 vs
 
+
+
+{-
+    Indent adjusters
+-}
+
+
+
 sideWsToString : SideWs -> String
 sideWsToString w =
     case w of
@@ -192,10 +205,17 @@ sideWsToString w =
         NoSpace -> ""
         LineBreak -> "⏎"
 
+
+
 sideWsView : String -> Side -> SideWs -> Html Msg
 sideWsView key side w =
     div [class "side-ws-view"]
-        [ select sideWsToString (SetSideWs key side) w [Space, NoSpace, LineBreak] ]
+        [ select
+            sideWsToString
+            (SetSideWs key side)
+            w
+            [Space, NoSpace, LineBreak]
+        ]
 
 
 indentToString : IndentWs -> String
@@ -209,8 +229,9 @@ indentToString w =
 indentView : String -> Side -> IndentWs -> Html Msg
 indentView key side w =
     div [class "side-ws-view"]
-        [ select indentToString (SetSideIndent key side) w [NoIndent, Indent, Outdent] ]
---        case w of
---            Indent -> [ text "Indent"]
---            Outdent -> [ text "Outdent"]
---            NoIndent -> [ text "No indent"]
+        [ select
+            indentToString
+            (SetSideIndent key side)
+            w
+            [NoIndent, Indent, Outdent]
+        ]

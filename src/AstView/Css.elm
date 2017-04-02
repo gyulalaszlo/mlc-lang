@@ -69,7 +69,7 @@ cssBody = """
 .ast-view .table select { font-family: "Fira Code", Monaco, Courier New; border: none; background:none; color: #ccc; min-width:3em; }
 
 .ast-view .code-style-editor .code-style-header { padding: 0.2em 0; }
-.ast-view .code-style-editor .code-style-header input { width: 90%; }
+.ast-view .code-style-editor .code-style-header input { width: 80%; }
 
 
 .ast-view .code-style-editor th {font-size:9px;}

@@ -48,6 +48,7 @@ type Msg
     | CodeStyleEditorMsg CodeStyleEditor.Msg
 
     | SetCodeStyleEditorShown Bool
+    | SelectTokenTag String
 --    | OnCompileDone (Result Error StatementList)
 
 
@@ -72,6 +73,18 @@ update msg model =
 
         SetCodeStyleEditorShown s ->
             { model | codeStyleEditorShown = s } ! []
+
+        SelectTokenTag s ->
+            let
+                (sm, sc) = CodeStyleEditor.update (CodeStyleEditor.Select s) model.codeStyleEditor
+            in
+                ({ model
+                    | codeStyleEditor = sm
+                    , codeStyleEditorShown = (s /= "")
+                    }
+                , Cmd.map CodeStyleEditorMsg sc)
+
+
 
 
 -- SUBSCRIPTIONS
@@ -121,6 +134,7 @@ tokenList ts =
             [Html.Attributes.class ("token token-" ++ class ++ " " ++ class)
             , attribute "data-tag" tag
             , attribute "data-class" class
+            , onClick (SelectTokenTag tag)
             ]
             [Html.text text] )
         ts
