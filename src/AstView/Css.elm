@@ -46,7 +46,7 @@ cssBody = """
 .ast-view .token-whiteSpace:hover {  background: #333;  }
 
 .ast-view .token-indent,
-.ast-view .token-outdent { color: #322; position:absolute; margin-left: -2em; }
+.ast-view .token-outdent { color: #222; position:absolute; left: -1.5em; }
 
 .ast-view .token-outdent:before { content: ""; }
 .ast-view .token-indent:before { content: ""; }
@@ -56,6 +56,9 @@ cssBody = """
 
 .ast-view .token-symbol:hover { background-color: #7c7; color: #222; }
 .ast-view .token-functionName:hover { background-color: #5ca; color: #222; }
+
+.ast-view .table { width: 100%; }
+.ast-view .table select { font-family: "Fira Code", Monaco, Courier New; border: none; background:none; color: #ccc; min-width:3em; }
 
 
 

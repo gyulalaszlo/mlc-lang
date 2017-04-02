@@ -8,7 +8,7 @@ import CAsm.Error as Error exposing (Error, errorToString)
 import CAst exposing (StatementList)
 import CAst.AstBuilder exposing (toAst)
 import CAst.AstPrinter exposing (Token, statementListToTokens)
-import CAst.CodeStyle exposing (applyCodeStyle, defaultCodeStyle)
+import CAst.CodeStyle exposing (CodeStyle, applyCodeStyle, defaultCodeStyle)
 import Html exposing (Html, div, pre, text)
 import Html.Attributes exposing (attribute, class)
 import Task
@@ -97,7 +97,7 @@ codeView model =
 
         Just {assembly, ast} ->
             div [class "ast-view"]
-                [ astView ast
+                [ astView model.codeStyleEditor.codeStyle ast
                 ]
 
 
@@ -113,14 +113,14 @@ tokenList ts =
             [Html.text text] )
         ts
 
-astView : Result Error StatementList -> Html Msg
-astView s =
+astView : CodeStyle -> Result Error StatementList -> Html Msg
+astView codeStyle s =
     case s of
         Ok ast ->
             Html.code []
                 [ Html.pre [class "c-code"]
                     <| tokenList
-                    <| applyCodeStyle defaultCodeStyle
+                    <| applyCodeStyle codeStyle
                     <| statementListToTokens ast
                 ]
         Err errors -> Html.pre [] [ Html.text <| errorToString errors]

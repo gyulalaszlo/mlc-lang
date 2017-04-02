@@ -1,5 +1,5 @@
 module CAst.CodeStyle exposing
-    ( defaultCodeStyle, applyCodeStyle, CodeStyle, Ws, SideWs(..), WsIndent(..)
+    ( defaultCodeStyle, applyCodeStyle, CodeStyle, Ws, SideWs(..), IndentWs(..)
 
     )
 {-| Describe me please...
@@ -79,7 +79,7 @@ type SideWs
     | Space
     | LineBreak
 
-type WsIndent
+type IndentWs
     = Indent
     | Outdent
     | NoIndent
@@ -87,8 +87,8 @@ type WsIndent
 type alias Ws =
     { left: SideWs
     , right: SideWs
-    , indentLeft: WsIndent
-    , indentRight: WsIndent
+    , indentLeft: IndentWs
+    , indentRight: IndentWs
     }
 
 emptyWs : Ws
@@ -229,7 +229,7 @@ sideWs tag w =
 
 
 
-tokensForIndent : WsIndent -> List Token
+tokensForIndent : IndentWs -> List Token
 tokensForIndent ind =
     case ind of
         Indent -> [indentToken]
