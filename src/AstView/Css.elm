@@ -15,14 +15,15 @@ cssBody : String
 cssBody = """
 
 
-.ast-view { font-family: Arial, Verdana, sans-serif; padding:0; margin:0; }
-.ast-view { background: #111110; color: #999;}
+.ast-view { font-family: Arial, Verdana, sans-serif; padding:0; margin:0; font-size: 13px; }
+.ast-view { background: #222; color: #999;}
 
 
 .ast-view code,
-.ast-view pre { font-family: "Fira Code", Monaco, Courier New; font-size: 12px; }
+.ast-view pre,
+.ast-view button { font-family: "Fira Code", Monaco, Courier New; font-size: 12px; }
 
-.ast-view code { padding: 32px 0 0 2em; display:block }
+.ast-view code { padding: 0 0 0 2em; display:block; background: #111; }
 .ast-view pre { line-heigth:1.2em; position:relative; }
 
 .ast-view .c-code {  white-space: pre-wrap; background: #222220; padding: 1em; margin:0; }
@@ -62,15 +63,15 @@ cssBody = """
 
 .ast-view { position:absolute; overflow:hidden; height:100%; width:100%; }
 
-.ast-view .code-view { width:100%; height:100%; position:absolute; top: 0; left: 0; overflow-y: scroll; }
-.ast-view .code-style-editor { background: #111; border-left: 1px solid #333; position: absolute; right: 0; top:0;   height: 100%; overflow-y: scroll; padding: 0 1em; box-shadow: -5px 0 10px rgba(0,0,0,0.5); min-width: 400px; }
+.ast-view .code-view { position:absolute; top: 32px; left: 0; bottom: 0; right: 0; }
+.ast-view .code-style-editor {}
 
 /* code-style editor */
 
-.ast-view .table { line-height:1.4em; }
+.ast-view .table { line-height:1.4em; width:100%; }
 .ast-view .table select { font-family: "Fira Code", Monaco, Courier New; border: none; background:none; color: #ccc; min-width:3em; }
 
-.ast-view .code-style-editor .code-style-header { padding: 0.2em 0; }
+.ast-view .code-style-editor .code-style-header { padding: 0.2em 0;  }
 .ast-view .code-style-editor .code-style-header input { width: 80%; }
 
 
@@ -90,8 +91,13 @@ cssBody = """
 
 /* header */
 
-.ast-view button { outline: none; }
-.ast-view-header { z-index: 999; position: absolute; }
+.ast-view button { outline: none; background: #222; color: #999; border: none; border-radius: 5px; margin: 0 0.5em; transition: background-color 0.3s, color 0.3s, border-bottom 0.2s; border-bottom: 3px solid }
+
+.ast-view button:hover { background: #f70; color: #000; border-bottom: 3px solid #c50; }
+.ast-view button.on { color: #f70; }
+.ast-view button.on:hover { color: #000; }
+
+.ast-view-header { z-index: 999; position: absolute; background: rgba(0,0,0,0.85); width:100%; height: 26px; padding: 3px }
 
 
 /* Scrollbar styles */
@@ -103,4 +109,7 @@ cssBody = """
 
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.1);  }
 
+
+
+.ast-view .split-pane { position:absolute; overflow-x:hidden; overflow-y:scroll; }
 """

@@ -10,6 +10,7 @@ import CAst exposing (StatementList)
 import CAst.AstBuilder exposing (toAst)
 import CAst.AstPrinter exposing (Token, statementListToTokens)
 import CAst.CodeStyle exposing (CodeStyle, applyCodeStyle, defaultCodeStyle)
+import Helpers.SplitLayout as SplitLayout
 import Html exposing (Html, div, pre, text)
 import Html.Attributes exposing (attribute, class)
 import Html.Events exposing (onClick)
@@ -33,6 +34,8 @@ type alias Model =
 
     , asmView: AsmView.Model
     , asmViewShown: Bool
+
+    , splitLayout: SplitLayout.Model
     }
 
 initialModel : Model
@@ -44,6 +47,8 @@ initialModel =
 
     , asmView = AsmView.initialModel
     , asmViewShown = False
+
+    , splitLayout = SplitLayout.initialModel
     }
 
 
@@ -59,6 +64,8 @@ type Msg
 
     | AsmViewMsg AsmView.Msg
     | SetAsmViewShown Bool
+
+    | SplitLayoutMsg SplitLayout.Msg
 --    | OnCompileDone (Result Error StatementList)
 
 
@@ -103,6 +110,14 @@ update msg model =
         SetAsmViewShown s ->
             { model | asmViewShown = s } ! []
 
+        SplitLayoutMsg m ->
+            let
+                (sm, sc) = SplitLayout.update m model.splitLayout
+            in
+                ({ model | splitLayout = sm }, Cmd.map SplitLayoutMsg sc)
+
+
+
 
 
 
@@ -122,12 +137,6 @@ view model =
     div [class "ast-view"]
         [ headerView model
         , codeView model
-        , if model.codeStyleEditorShown
-            then
-                Html.map CodeStyleEditorMsg <|
-                    CodeStyleEditor.view model.codeStyleEditor
-            else
-                Html.text ""
         ]
 
 codeView : Model -> Html Msg
@@ -141,14 +150,22 @@ codeView model =
 
         Just {assembly, ast} ->
             div [class "code-view"]
-                [ text ""
-                , if model.asmViewShown
-                        then
-                            Html.map AsmViewMsg <|
-                                AsmView.view model.asmView assembly
-                        else
-                            text ""
-                , astView model.codeStyleEditor.codeStyle ast
+                [ SplitLayout.view model.splitLayout <|
+                    List.concat
+                        [ if model.asmViewShown
+                                then
+                                    [Html.map AsmViewMsg <|
+                                        AsmView.view model.asmView assembly]
+                                else
+                                    []
+                        , if model.codeStyleEditorShown
+                            then
+                                [Html.map CodeStyleEditorMsg <|
+                                    CodeStyleEditor.view model.codeStyleEditor]
+                            else
+                                []
+                        , [astView model.codeStyleEditor.codeStyle ast]
+                        ]
                 ]
 
 
@@ -185,7 +202,8 @@ astView codeStyle s =
 headerView : Model -> Html Msg
 headerView model =
     div [class "ast-view-header"]
-        [ showButton "Code Style" SetCodeStyleEditorShown model.codeStyleEditorShown
+        [ directionButton model.splitLayout.direction
+        , showButton "Code Style" SetCodeStyleEditorShown model.codeStyleEditorShown
         , showButton "Assembly" SetAsmViewShown model.asmViewShown
         ]
 
@@ -194,9 +212,23 @@ headerView model =
 showButton : String -> (Bool -> msg) -> Bool -> Html msg
 showButton label msg v =
     Html.button
-        [ onClick <| msg (not v)]
-        [ text <| if v then "Hide " ++ label else "Show " ++ label
+        [ onClick <| msg (not v), class <| if v then "on" else "off" ]
+        [ text <| label
         ]
+
+directionButton : SplitLayout.Direction -> Html Msg
+directionButton d =
+    case d of
+        SplitLayout.Horizontal ->
+            Html.button
+                [ onClick <| SplitLayoutMsg <| SplitLayout.SetDirection SplitLayout.Vertical]
+                [ text "Split ||"
+                ]
+        SplitLayout.Vertical ->
+            Html.button
+                [ onClick <| SplitLayoutMsg <| SplitLayout.SetDirection SplitLayout.Horizontal]
+                [ text "Split =="
+                ]
 
 
 

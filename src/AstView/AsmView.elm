@@ -49,6 +49,6 @@ update msg model =
 
 view : Model -> CAsm -> Html Msg
 view model c =
-    div [ class "AsmView-view" ]
+    div [ class "asm-view" ]
         [ Html.pre []
             [ text <| prettyPrint c]]
