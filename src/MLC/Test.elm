@@ -2,6 +2,8 @@ module MLC.Test exposing (..)
 {-| Describe me please...
 |-}
 
+import AstView.Css
+import Helpers.Css
 import Html
 import MLC.StructureEditor exposing (Model, Msg(..), update, initialModel, subscriptions, view)
 
@@ -13,18 +15,18 @@ init =
 --    ( initialModel, Task.perform SetAssembly (Task.succeed CAsmSample.sample) )
 
 
---wrapView model =
---    Html.div []
---        [ AstView.Css.css
---        , view model
---        ]
+wrapView model =
+    Html.div []
+        [ Helpers.Css.css
+        , view model
+        ]
 
 
 main : Program Never Model Msg
 main =
     Html.program
         { init = init
-        , view = view
+        , view = wrapView
         , update = update
         , subscriptions = subscriptions
         }

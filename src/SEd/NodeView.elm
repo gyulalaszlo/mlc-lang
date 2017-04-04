@@ -12,7 +12,7 @@ module SEd.NodeView exposing
 |-}
 
 import Html exposing (Html, div, text)
-import Html.Attributes exposing (class)
+import Html.Attributes exposing (class, style)
 
 
 -- MODEL
@@ -86,17 +86,37 @@ view model =
 --        [ text <| toString model ]
 
 
+leafSelectionStyle : LeafMeta -> Html.Attribute msg
+leafSelectionStyle {isSelected} =
+    if isSelected
+        then class "is-target"
+        else class ""
+
+
 leafView : LeafMeta -> Html Msg
 leafView meta =
-    Html.span [] [ text <| "leaf:" ++ toString meta ]
+    Html.span
+        [ class "leaf" , leafSelectionStyle meta ]
+        [ text <| meta.label ]
+
+space = Html.span [class "space"] [ text " " ]
+
+nodeSelectionClass : NodeMeta -> Html.Attribute msg
+nodeSelectionClass {selection} =
+    case selection of
+        NotSelected -> class ""
+        IsInPath -> class "is-in-path"
+        IsTarget -> class "is-target"
+
 
 nodeView : NodeMeta -> List Model -> Html Msg
 nodeView meta children =
-    Html.div []
-        [ Html.h4 [] [ text "List" ]
-        , Html.ul [] <|
-            List.map (\c -> Html.li [] [ view c ]) children
-        ]
+    Html.span [ class "node-view", nodeSelectionClass meta ] <|
+        List.concat
+            [ [ Html.i [] [ text "("] ]
+            , List.intersperse space <|  List.map view children
+            , [ Html.i [] [ text ")"] ]
+            ]
 
 
 

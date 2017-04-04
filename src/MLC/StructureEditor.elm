@@ -14,8 +14,10 @@ import Html.Attributes exposing (class)
 import Keyboard exposing (KeyCode)
 import MLC.StateMachine as StateMachine exposing (StateMachine, Transition, isInAnyState, isInState, stateMachine, transition)
 import Result.Extra
-import SEd.NodeView
+import SEd.NodeTree as NodeTree
+import SEd.CursorView as CursorView
 import Set
+import Update
 
 
 type alias Cursor = ExpressionCursor
@@ -43,8 +45,15 @@ type alias ModelInner =
 
     , error: Maybe Error
 
---    , nodeView: SEd.NodeView.Model
-    , nodeView: SEd.NodeView.Model
+    -- Sub component: NodeTree
+    , nodeTree: NodeTree.Model
+
+    -- Sub component: CursorView
+    , cursorView: CursorView.Model Int
+
+
+
+
     }
 
 
@@ -71,7 +80,8 @@ initialModelInner =
 
     , error = Nothing
 --    , nodeView = SEd.NodeView.initialModel
-    , nodeView = toNodeViewModel initialCursor initialData
+     , nodeTree = NodeTree.initialModel
+     , cursorView = CursorView.initialModel
     }
 
 
@@ -89,7 +99,11 @@ type Msg
     = KeyPress KeyCode
     | KeyDown KeyCode
     | KeyUp KeyCode
-    | NodeViewMsg SEd.NodeView.Msg
+
+    | NodeTreeMsg NodeTree.Msg
+    | CursorViewMsg CursorView.Msg
+
+
     | NoOp
 
 
@@ -112,7 +126,22 @@ subscriptions model =
 
 
 
+
+-- GENERIC UPDATE
+
+
+type alias UpdateResult msg model = (model, Cmd msg)
+type alias UpdateFn msg model = msg -> model -> (model, Cmd msg)
+
+andThenUpdate : UpdateFn msg model -> msg -> (model, Cmd msg) -> (model, Cmd msg)
+andThenUpdate fn msg (model, cmd) = let (sm, sc) = fn msg model in sm ! [sc, cmd]
+
+
+
+
 -- UPDATE
+
+
 
 keyLimit = 5
 
@@ -121,46 +150,58 @@ updateState s m = { m | state = s m.state }
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
+    Update.unhandled msg model
+        |> StateMachine.transition
+        |> Update.map (updateInner updateLastKeys)
+        |> Update.map (updateInner updateNodeViewModel)
+        |> Update.done (\err -> noCmd <| updateState (\s -> {s | error = Just err }) model)
 
+
+updateChildren : Msg -> ModelInner -> (ModelInner, Cmd Msg)
+updateChildren msg model =
     case msg of
-        NodeViewMsg m ->
+        NodeTreeMsg m ->
             let
-                (sm, sc) = SEd.NodeView.update m model.state.nodeView
+                (sm, sc) = NodeTree.update m model.nodeTree
             in
-                ( updateState (\s -> { s | nodeView = sm }) model
-                , Cmd.map NodeViewMsg sc)
+                ({ model | nodeTree = sm }, Cmd.map NodeTreeMsg sc)
 
-        _ ->
+        CursorViewMsg m ->
+            let
+                (sm, sc) = CursorView.update m model.cursorView
+            in
+                ({ model | cursorView = sm }, Cmd.map CursorViewMsg sc)
 
-
-            case updateStateMachine msg model of
-                Ok (model, cmd) -> (updateState (\s -> { s| error = Nothing}) model, cmd)
-                Err err ->
-                    ( updateState (\s -> { s | error = Just err }) model
-                    , Cmd.none
-                    )
+        _ -> (model, Cmd.none)
 
 
+updateInner : UpdateFn Msg ModelInner -> Msg -> Model -> (Model, Cmd Msg)
+updateInner update msg model =
+    let (sm,sc) = update msg model.state in { model | state = sm } ! [sc]
 
 
-updateStateMachine : Msg -> SM -> Result Error (SM, Cmd Msg)
-updateStateMachine =
-    StateMachine.transitionThen <|
-        \msg (m, cmd) ->
-            Ok ( updateLastKeys msg <| updateNodeViewModel m , cmd)
 
 
-updateLastKeys : Msg -> ModelInner -> ModelInner
+updateLastKeys : Msg -> ModelInner -> (ModelInner, Cmd Msg)
 updateLastKeys msg m =
-    case msg of
-        KeyPress c ->
-            { m | lastKeys = List.take keyLimit <| (Char.fromCode c) ::  m.lastKeys }
-        _ -> m
+    noCmd <|
+        case msg of
+            KeyPress c ->
+                { m | lastKeys = List.take keyLimit <| (Char.fromCode c) ::  m.lastKeys }
+            _ -> m
 
 
-updateNodeViewModel : ModelInner -> ModelInner
-updateNodeViewModel sm =
-    { sm | nodeView = MLC.NodeViewAdapter.toNodeViewModel sm.cursor sm.data }
+updateNodeViewModel : Msg -> ModelInner -> (ModelInner, Cmd Msg)
+updateNodeViewModel msg model =
+    { model
+    | nodeTree =
+        { nodeView =
+            MLC.NodeViewAdapter.toNodeViewModel
+            model.cursor
+            model.data
+        }
+    , cursorView = CursorView.setCursor model.cursor model.cursorView
+    } ! []
 
 
 -- VIEW
@@ -169,19 +210,9 @@ updateNodeViewModel sm =
 
 view : Model -> Html Msg
 view {state} =
-    div [ class "StructureEditor-view" ]
-        [ Html.dl []
-            [ Html.dt [] [ text "Cursor:"]
-            , Html.dd [] [ text <| toString state.cursor ]
-
-            , Html.dt [] [ text "Data:"]
-            , Html.dd [] [ text <| toString state.data ]
-
-            , Html.dt [] [ text "stack:"]
-            , Html.dd [] [ text <| toString state.stack ]
-            ]
-        , Html.map NodeViewMsg <| SEd.NodeView.view state.nodeView
---        , exprView state.data
+    div [ class "StructureEditor-view mkz-view" ]
+        [ Html.map CursorViewMsg <| CursorView.view state.cursorView
+        , Html.map NodeTreeMsg <| NodeTree.view state.nodeTree
         , lastKeyView state.lastKeys
         , stackView state
         , case state.error of
@@ -231,7 +262,7 @@ exprView e =
 
 -- STATE MACHINE STUFF
 
-type alias Trans = Transition Error Msg ModelInner
+type alias UpdateChain = Update.Chain Error Msg ModelInner
 
 keyDownBase : (KeyCode -> Bool -> Bool) -> String -> (Msg -> Bool)
 keyDownBase f ks =
@@ -265,7 +296,7 @@ inKey m =
         InKey _ -> True
         _ -> False
 
-mlcEditorTransitions : List Trans
+mlcEditorTransitions : List (Transition Error Msg ModelInner)
 mlcEditorTransitions =
     [ { on = keyDown "("   , from = inAnyState       , with = startList }
     , { on = keyDown ")"   , from = inList  , with = endList }
@@ -278,27 +309,7 @@ mlcEditorTransitions =
 
 -- HANDLERS
 
-cursorStepInto : M.Expression -> Cursor -> Result Error Cursor
-cursorStepInto data c =
-    Cursor.get cursorTraits c data
-        |> Result.map (\e ->
-            case e of
-                M.EList es -> Cursor.push (List.length es) c
-                _ -> c )
-        |> Error.wrapErrorMsg ["while cursorStepInto", toString c, "into", toString data  ]
 
-
-
-
-cursorStepOut : M.Expression -> Cursor -> Result Error Cursor
-cursorStepOut data c =
-
-    Cursor.get cursorTraits c data
-        |> Result.andThen (\e ->
-            case e of
-                M.EList es -> Cursor.pop cursorTraits c
-                _ -> Ok c )
-        |> Error.wrapErrorMsg ["while cursorStepOut from", toString c , "in", toString data]
 
 
 noCmd : model -> (model, Cmd msg)
@@ -315,11 +326,6 @@ pushNew e state model =
             Cursor.set cursorTraits Cursor.InsertTail e model.cursor model.data
                 |> Debug.log ("pushNew " ++ toString e ++ " " ++ toString model.cursor ++ "//")
                 |> Result.map (\(newCursor, data) -> { model | data = data, cursor = newCursor })
---                |> Result.andThen2 (\ model)
---                |> Result.andThen
---                    (\model ->
---                        cursorStepInto model.data model.cursor
---                            |> Result.map (\c -> { model | cursor = c }))
 
         updateStackAndState model =
             { model
@@ -345,17 +351,20 @@ popState model =
 -- LIST
 
 
-startList :  Msg -> ModelInner -> Result Error (ModelInner, Cmd Msg)
+startList :  Msg -> ModelInner -> UpdateChain
 startList msg model =
     pushNew (M.EList []) InList model
+        |> Update.fromResult msg
 
-endList :  Msg -> ModelInner -> Result Error (ModelInner, Cmd Msg)
+
+endList :  Msg -> ModelInner -> UpdateChain
 endList msg model =
     Cursor.pop cursorTraits model.cursor
         |> Result.map (\c -> { model | cursor = c })
+        |> Result.andThen popState
         |> Result.map noCmd
         |> Error.wrapErrorMsg [ "in endList" ]
---    popLast model
+        |> Update.fromResult msg
 
 
 
@@ -376,23 +385,22 @@ keyCode m =
 
 
 
-startSymbol :  Msg -> ModelInner -> Result Error (ModelInner, Cmd Msg)
+startSymbol :  Msg -> ModelInner -> UpdateChain
 startSymbol msg model =
     case keyCode msg of
-        Nothing -> Ok <| noCmd model
+        Nothing -> Update.unhandled msg model
         Just kc ->
             let s = appendKey "" kc
             in
                 pushNew (M.EKey s) (InKey s) model
+                    |> Update.fromResult msg
 
 
-addSymbolChar :  Msg -> ModelInner -> Result Error (ModelInner, Cmd Msg)
+addSymbolChar :  Msg -> ModelInner -> UpdateChain
 addSymbolChar msg model =
---    keyCode msg
---        |> Maybe.map (\kc -
 
     case keyCode msg  of
-        Nothing -> Ok <| noCmd model
+        Nothing -> Update.unhandled msg model
         Just kc ->
             case model.current of
                 InKey s ->
@@ -411,18 +419,21 @@ addSymbolChar msg model =
                                     { model | current = InKey newS, data = d, cursor = newCursor})
                             |> Result.map noCmd
                             |> Error.wrapErrorMsg ["while addSymbolChar " ++ toString model.cursor ]
+                            |> Update.fromResult msg
 
 
-                _ -> Err <| Error.make "In invalid state, not InKey"
+                _ -> Update.unhandled msg model
 
-endSymbol :  Msg -> ModelInner -> Result Error (ModelInner, Cmd Msg)
+
+
+endSymbol :  Msg -> ModelInner -> UpdateChain
 endSymbol msg model =
     Cursor.pop cursorTraits model.cursor
         |> Result.map (\c -> { model | cursor = c })
         |> Result.andThen popState
         |> Result.map noCmd
         |> Error.wrapErrorMsg [ "in endList" ]
---    popLast model
+        |> Update.fromResult msg
 
 
 

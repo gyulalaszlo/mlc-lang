@@ -2,14 +2,23 @@ module MLC.StateMachine exposing (..)
 {-| Describe me please...
 |-}
 
+import Html
 import List.Extra
+import Update
 
+
+
+--type alias InnerResult x msg state = Result x (state, Cmd msg)
+--type alias InnerTransResult x msg state = Maybe (InnerResult x msg state)
+--
+--type alias OuterResult x msg state = Result x (StateMachine x msg state, Cmd msg)
+type alias TransitionFn x msg state = msg -> state -> Update.Chain x msg state
 
 
 type alias Transition x msg state =
     { on: (msg -> Bool)
     , from: (state -> Bool)
-    , with: (msg -> state -> Result x (state, Cmd msg))
+    , with: TransitionFn x msg state
     }
 
 
@@ -17,6 +26,9 @@ type alias StateMachine x msg state =
     { state: state
     , transitions: List (Transition x msg state)
     }
+
+type alias UpdateChain x msg state =
+    Update.Chain x msg (StateMachine x msg state)
 
 {-| Creates a new state machine.
 -}
@@ -32,35 +44,49 @@ state s = s.state
 
 
 
-transition : msg -> StateMachine x msg state -> Res x msg state
-transition msg sm =
-    let handler = List.Extra.find (\t -> (t.from sm.state) && (t.on msg)) sm.transitions
-    in case handler of
-        Nothing -> Ok (sm, Cmd.none)
-        Just t ->
-            t.with msg sm.state
-                |> Result.map (\(cm,cc) -> ({ sm | state = cm }, cc))
 
 
-type alias Res x msg state = Result x (StateMachine x msg state, Cmd msg)
-type alias TransitionThen x msg state =
-    msg -> (state, Cmd msg) -> Result x (state, Cmd msg)
+
+transitionToChain : msg -> StateMachine x msg state -> UpdateChain x msg state
+transitionToChain msg sm =
+    Update.unhandled msg sm
+        |> Update.andThen runTransition
+--        |> Maybe.map (afterTransition sm)
+
+transition : UpdateChain x msg state -> UpdateChain x msg state
+transition = Update.andThen runTransition
 
 
-transitionThen : TransitionThen x m s  -> m -> StateMachine x m s -> Res x m s
-transitionThen fn msg sm =
-    let handler = List.Extra.find (\t -> (t.from sm.state) && (t.on msg)) sm.transitions
-    in case handler of
-        Nothing -> Ok (sm, Cmd.none)
-        Just t ->
-            t.with msg sm.state
-                |> Result.andThen (fn msg)
-                |> Result.map (\(cm, cc) -> ({ sm | state = cm }, cc))
---            let (cm,cc) = fn msg <|
---            in )
---        |> Maybe.withDefault (sm, Cmd.none)
+--transitionThen : TransitionFn x msg s  -> msg -> StateMachine x msg s -> OuterResult x msg s
+--transitionThen fn msg sm =
+--    case runTransition msg sm of
+--        Nothing -> Ok (sm, Cmd.none)
+--        Just (Err e) -> Err e
+--        Just (Ok (resultModel, resultCmd)) ->
+--            let (thenModel, thenCmd) = fn msg resultModel
+--            in afterTransition sm (thenModel, Cmd.batch [resultCmd, thenCmd])
+----            |> Result.andThen (Maybe.map (\res -> fn msg res))
 
 
+
+runTransition : msg -> StateMachine x msg state -> UpdateChain x msg state
+runTransition msg sm =
+    let
+        state = sm.state
+        handler = List.Extra.find (\t -> (t.from state) && (t.on msg)) sm.transitions
+    in
+        case handler of
+            Nothing -> Update.unhandled msg sm
+            Just t -> Update.map (\msg state  -> ({ sm | state = state }, Cmd.none) ) (t.with msg state)
+
+
+--
+--afterTransition : StateMachine x msg state -> InnerTransResult x msg state -> OuterResult x msg state
+--afterTransition sm res =
+--    case res of
+--        Nothing -> Ok (sm, Cmd.none)
+--        Just (Ok (cm,cc)) -> Ok <| { sm | state = cm } ! [cc]
+--        Just (Err err) -> Err err
 
 -- Generic State machine predicates
 
@@ -71,4 +97,13 @@ isInState : (model -> state) -> state -> model -> Bool
 isInState f s m = (f m) == s
 
 
+
+
+
+
+
+
+
+
+main = Html.text ""
 

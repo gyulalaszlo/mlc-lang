@@ -1,0 +1,70 @@
+module SEd.CursorView exposing
+    (Model
+
+    , initialModel
+    , setCursor
+
+    , Msg(..)
+    , subscriptions
+    , update
+    , view)
+{-| Describe me please...
+-}
+
+import Html exposing (Html, div, text)
+import Html.Attributes exposing (class)
+import MLC.Cursor as Cursor exposing (Cursor)
+
+
+
+-- MODEL
+
+
+type alias Model k =
+    { cursor: Cursor k
+    }
+
+
+initialModel : Model k
+initialModel =
+    { cursor = Cursor.leaf
+    }
+
+
+setCursor : Cursor k -> Model k -> Model k
+setCursor c model =
+    { model | cursor = c }
+
+-- MSG
+
+
+type Msg
+    = Noop
+
+
+
+-- SUBSCRIPTIONS
+
+
+subscriptions : Model k -> Sub Msg
+subscriptions model =
+    Sub.none
+
+
+
+-- UPDATE
+
+
+update : Msg -> Model k -> (Model k, Cmd Msg)
+update msg model =
+    case msg of
+        Noop -> model ! []
+
+
+-- VIEW
+
+
+view : Model k -> Html Msg
+view model =
+    div [ class "CursorView-view" ]
+        [ text <| toString model ]
