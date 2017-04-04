@@ -12,6 +12,9 @@ empty = Error { msg = "", children = [] }
 make : String -> Error
 make s = Error { msg = s, children = [] }
 
+makeMsg : List String -> Error
+makeMsg s = Error { msg = (String.join " " s), children = [] }
+
 wrapIn : String -> List Error -> Error
 wrapIn s es = Error { msg = s, children = es }
 

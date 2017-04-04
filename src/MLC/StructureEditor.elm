@@ -2,16 +2,23 @@ module MLC.StructureEditor exposing (Model, initialModel, Msg(..), subscriptions
 {-| Describe me please...
 |-}
 
+import CAsm.Error as Error exposing (Error)
 import Char
 import List.Extra
 import MLC.Cursor as Cursor
+import MLC.ExpressionCursor exposing (ExpressionCursor, cursorTraits)
+import MLC.NodeViewAdapter exposing (toNodeViewModel)
 import MLC.Types as M
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class)
 import Keyboard exposing (KeyCode)
 import MLC.StateMachine as StateMachine exposing (StateMachine, Transition, isInAnyState, isInState, stateMachine, transition)
+import Result.Extra
+import SEd.NodeView
 import Set
 
+
+type alias Cursor = ExpressionCursor
 
 -- MODEL
 
@@ -22,7 +29,10 @@ type Node k v
 
 
 
-type alias Model = StateMachine Msg ModelInner
+
+type alias SM =  StateMachine Error Msg ModelInner
+type alias Model = SM
+--type alias Model = Result Error SM
 
 type alias ModelInner =
     { current: State
@@ -30,6 +40,11 @@ type alias ModelInner =
     , data: M.Expression
     , lastKeys: List Char
     , cursor: Cursor
+
+    , error: Maybe Error
+
+--    , nodeView: SEd.NodeView.Model
+    , nodeView: SEd.NodeView.Model
     }
 
 
@@ -39,65 +54,32 @@ type State
 
 
 initialModel : Model
-initialModel = stateMachine initialModelInner mlcEditorTransitions
+initialModel =  stateMachine initialModelInner mlcEditorTransitions
 
+
+initialData = M.EList []
+initialCursor = Cursor.leaf
 
 initialModelInner : ModelInner
 initialModelInner =
     { current = InList
     , stack = []
-    , data = M.EList []
+    , data = initialData
+--    , data = sample
     , lastKeys = []
-    , cursor = Cursor.from 0
+    , cursor = Cursor.leaf
+
+    , error = Nothing
+--    , nodeView = SEd.NodeView.initialModel
+    , nodeView = toNodeViewModel initialCursor initialData
     }
 
 
-type alias Cursor = Cursor.Cursor Int
+sample = M.EList
+    [ M.EList [ M.EKey "ABC" ]
+    , M.EKey "BAR"
+    ]
 
-
-getAtCursor : Int -> M.Expression -> Maybe M.Expression
-getAtCursor n e =
-    case e of
-      M.EList es -> List.Extra.getAt n es
-      M.EKey str -> Just e
---      _ -> Nothing
-
-setAtCursor : Int -> M.Expression -> M.Expression -> Maybe M.Expression
-setAtCursor n new parent =
-    case parent of
-        M.EList es ->
-            Just <| M.EList <|
-                List.concat
-                    [ List.take (n) es
-                    , [ new ]
-                    , List.drop (n + 1) es
-                    ]
-        M.EKey _ -> Just new
-
---        _ -> Nothing
-
-insertAtCursor : Int -> M.Expression -> M.Expression -> Maybe M.Expression
-insertAtCursor n new parent =
-    case parent of
-        M.EList es ->
-            Just <| M.EList <|
-                List.concat
-                    [ List.take n es
-                    , [ new ]
-                    , List.drop n es
-                    ]
-        M.EKey _ -> Just new
-
---        _ -> Nothing
-
-getAt : Cursor -> M.Expression -> Maybe M.Expression
-getAt c e = Cursor.get getAtCursor c e
-
-setAt : Cursor -> M.Expression -> M.Expression -> Maybe M.Expression
-setAt c new parent = Cursor.set getAtCursor setAtCursor c new parent
-
-insertAt : Cursor -> M.Expression -> M.Expression -> Maybe M.Expression
-insertAt c new parent = Cursor.set getAtCursor insertAtCursor c new parent
 -- MSG
 
 
@@ -107,7 +89,8 @@ type Msg
     = KeyPress KeyCode
     | KeyDown KeyCode
     | KeyUp KeyCode
-    | Noop
+    | NodeViewMsg SEd.NodeView.Msg
+    | NoOp
 
 
 
@@ -116,12 +99,16 @@ type Msg
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.batch
-        [ Keyboard.presses KeyPress
-        , Keyboard.downs KeyDown
-        , Keyboard.ups KeyUp
-        ]
---    Sub.none
+--    case model of
+--        Err _ ->
+--            Sub.none
+--
+--        Ok _ ->
+            Sub.batch
+                [ Keyboard.presses KeyPress
+                , Keyboard.downs KeyDown
+                , Keyboard.ups KeyUp
+                ]
 
 
 
@@ -129,15 +116,51 @@ subscriptions model =
 
 keyLimit = 5
 
+updateState : (s -> s) -> {m | state:s} -> { m | state:s}
+updateState s m = { m | state = s m.state }
+
 update : Msg -> Model -> (Model, Cmd Msg)
-update =
+update msg model =
+
+    case msg of
+        NodeViewMsg m ->
+            let
+                (sm, sc) = SEd.NodeView.update m model.state.nodeView
+            in
+                ( updateState (\s -> { s | nodeView = sm }) model
+                , Cmd.map NodeViewMsg sc)
+
+        _ ->
+
+
+            case updateStateMachine msg model of
+                Ok (model, cmd) -> (updateState (\s -> { s| error = Nothing}) model, cmd)
+                Err err ->
+                    ( updateState (\s -> { s | error = Just err }) model
+                    , Cmd.none
+                    )
+
+
+
+
+updateStateMachine : Msg -> SM -> Result Error (SM, Cmd Msg)
+updateStateMachine =
     StateMachine.transitionThen <|
         \msg (m, cmd) ->
-            case msg of
-                KeyPress c -> ({ m | lastKeys = (Char.fromCode c) :: (List.take keyLimit m.lastKeys) }, cmd)
-                _ -> (m,cmd)
+            Ok ( updateLastKeys msg <| updateNodeViewModel m , cmd)
 
 
+updateLastKeys : Msg -> ModelInner -> ModelInner
+updateLastKeys msg m =
+    case msg of
+        KeyPress c ->
+            { m | lastKeys = List.take keyLimit <| (Char.fromCode c) ::  m.lastKeys }
+        _ -> m
+
+
+updateNodeViewModel : ModelInner -> ModelInner
+updateNodeViewModel sm =
+    { sm | nodeView = MLC.NodeViewAdapter.toNodeViewModel sm.cursor sm.data }
 
 
 -- VIEW
@@ -147,11 +170,28 @@ update =
 view : Model -> Html Msg
 view {state} =
     div [ class "StructureEditor-view" ]
-        [ text <| toString state
-        , Html.p [] [ text <| toString state.data ]
-        , exprView state.data
+        [ Html.dl []
+            [ Html.dt [] [ text "Cursor:"]
+            , Html.dd [] [ text <| toString state.cursor ]
+
+            , Html.dt [] [ text "Data:"]
+            , Html.dd [] [ text <| toString state.data ]
+
+            , Html.dt [] [ text "stack:"]
+            , Html.dd [] [ text <| toString state.stack ]
+            ]
+        , Html.map NodeViewMsg <| SEd.NodeView.view state.nodeView
+--        , exprView state.data
         , lastKeyView state.lastKeys
         , stackView state
+        , case state.error of
+            Nothing -> text ""
+            Just err ->
+                div [class "error"]
+                    [ Html.pre []
+                        [ text <| Error.errorToString err
+                        ]
+                    ]
         ]
 
 
@@ -182,8 +222,6 @@ exprView e =
             Html.span [] <| List.map (Html.li [] << List.singleton << exprView) es
         M.EKey s ->
             Html.span [] [ text s ]
---        v -> Html.span [] [ text <| toString v ]
--- SM 2
 
 
 -- STATE MACHINE
@@ -193,7 +231,7 @@ exprView e =
 
 -- STATE MACHINE STUFF
 
-type alias Trans = Transition Msg ModelInner
+type alias Trans = Transition Error Msg ModelInner
 
 keyDownBase : (KeyCode -> Bool -> Bool) -> String -> (Msg -> Bool)
 keyDownBase f ks =
@@ -240,83 +278,89 @@ mlcEditorTransitions =
 
 -- HANDLERS
 
-cursorStepInto : ModelInner -> Cursor -> Cursor
-cursorStepInto model c =
-    getAt c model.data
-        |> Maybe.map (\e ->
+cursorStepInto : M.Expression -> Cursor -> Result Error Cursor
+cursorStepInto data c =
+    Cursor.get cursorTraits c data
+        |> Result.map (\e ->
             case e of
                 M.EList es -> Cursor.push (List.length es) c
                 _ -> c )
-        |> Maybe.withDefault c
-
-cursorStepOut : Cursor -> Cursor
-cursorStepOut c = let cc = Cursor.pop c
-    in { cc | head = c.head + 1 }
+        |> Error.wrapErrorMsg ["while cursorStepInto", toString c, "into", toString data  ]
 
 
 
-pushNew : M.Expression -> State -> ModelInner -> (ModelInner, Cmd Msg)
+
+cursorStepOut : M.Expression -> Cursor -> Result Error Cursor
+cursorStepOut data c =
+
+    Cursor.get cursorTraits c data
+        |> Result.andThen (\e ->
+            case e of
+                M.EList es -> Cursor.pop cursorTraits c
+                _ -> Ok c )
+        |> Error.wrapErrorMsg ["while cursorStepOut from", toString c , "in", toString data]
+
+
+noCmd : model -> (model, Cmd msg)
+noCmd model = (model, Cmd.none)
+
+
+
+
+pushNew : M.Expression -> State -> ModelInner -> Result Error (ModelInner, Cmd Msg)
 pushNew e state model =
-    let c = cursorStepInto model model.cursor
-    in
-        ({ model
+    let
+
+        newCursorAndData model =
+            Cursor.set cursorTraits Cursor.InsertTail e model.cursor model.data
+                |> Debug.log ("pushNew " ++ toString e ++ " " ++ toString model.cursor ++ "//")
+                |> Result.map (\(newCursor, data) -> { model | data = data, cursor = newCursor })
+--                |> Result.andThen2 (\ model)
+--                |> Result.andThen
+--                    (\model ->
+--                        cursorStepInto model.data model.cursor
+--                            |> Result.map (\c -> { model | cursor = c }))
+
+        updateStackAndState model =
+            { model
             | current = state
             , stack = model.current :: model.stack
-            , cursor = c
-            , data = insertAt model.cursor e model.data
-                |> Maybe.withDefault (M.EList [])
             }
-        , Cmd.none
-        )
-
---updateExpr : M.Expression -> State -> ModelInner -> (ModelInner, Cmd Msg)
---updateExpr e state model =
---    ({ model
---        | current = state
---        , stack = model.current :: model.stack
---        , cursor = cursorStepInto model.cursor
---        , data = setAt model.cursor e model.data |> Maybe.withDefault model.data
---        }
---    , Cmd.none
---    )
---nextElement : ModelInner  -> ModelInner
---nextElement model =
---    { model
---        | data = setAt model.cursor e model.data |> Maybe.withDefault model.data
---        }
+    in
+        (newCursorAndData model)
+            |> Result.map updateStackAndState
+            |> Result.map noCmd
+            |> Error.wrapErrorMsg ["while pushNew " ++ toString e ]
 
 
-popLast : ModelInner -> (ModelInner, Cmd Msg)
-popLast model =
+
+
+popState : ModelInner -> Result Error ModelInner
+popState model =
     case model.stack of
-        [] -> (model, Cmd.none)
-        x :: xs ->
-            ({ model
-                | current = x
-                , stack = xs
-                , cursor = cursorStepOut model.cursor
-                }
-            , Cmd.none
-            )
+        [] -> Err <| Error.makeMsg ["Cannot pop empty stack from:", toString model.stack]
+        x :: xs -> Ok { model | current = x , stack = xs }
 
 
+-- LIST
 
-startList :  Msg -> ModelInner -> (ModelInner, Cmd Msg)
+
+startList :  Msg -> ModelInner -> Result Error (ModelInner, Cmd Msg)
 startList msg model =
     pushNew (M.EList []) InList model
---    ({ state | current = InList, stack = InList :: state.stack }, Cmd.none)
 
-
-
-endList :  Msg -> ModelInner -> (ModelInner, Cmd Msg)
+endList :  Msg -> ModelInner -> Result Error (ModelInner, Cmd Msg)
 endList msg model =
-    popLast model
---    case state.stack of
---        [] -> (state, Cmd.none)
---        x :: xs -> ({ state | current = x, stack = xs }, Cmd.none)
---    case state of
---        InList -> (state, Cmd.none)
---        InKey -> (state, Cmd.none)
+    Cursor.pop cursorTraits model.cursor
+        |> Result.map (\c -> { model | cursor = c })
+        |> Result.map noCmd
+        |> Error.wrapErrorMsg [ "in endList" ]
+--    popLast model
+
+
+
+
+-- SYMBOLS
 
 
 appendKey : String -> KeyCode -> String
@@ -329,46 +373,63 @@ keyCode m =
         KeyPress kc -> Just kc
         _ -> Nothing
 
-startSymbol :  Msg -> ModelInner -> (ModelInner, Cmd Msg)
+
+
+
+startSymbol :  Msg -> ModelInner -> Result Error (ModelInner, Cmd Msg)
 startSymbol msg model =
-    keyCode msg
-        |> Maybe.map (\kc ->
+    case keyCode msg of
+        Nothing -> Ok <| noCmd model
+        Just kc ->
             let s = appendKey "" kc
-            in pushNew (M.EKey s) (InKey s) model)
-        |> Maybe.withDefault (model, Cmd.none)
+            in
+                pushNew (M.EKey s) (InKey s) model
 
 
-addSymbolChar :  Msg -> ModelInner -> (ModelInner, Cmd Msg)
+addSymbolChar :  Msg -> ModelInner -> Result Error (ModelInner, Cmd Msg)
 addSymbolChar msg model =
 --    keyCode msg
---        |> Maybe.map (\kc ->
---            )
-    case msg of
-        KeyPress kc ->
+--        |> Maybe.map (\kc -
+
+    case keyCode msg  of
+        Nothing -> Ok <| noCmd model
+        Just kc ->
             case model.current of
                 InKey s ->
-                    let newS = appendKey s kc
+                    let
+                        newS = appendKey s kc
+                        newData =
+                            Cursor.set
+                                cursorTraits
+                                Cursor.Replace
+                                (M.EKey newS)
+                                model.cursor
+                                model.data
                     in
-                        { model
-                        | current = InKey newS
-                        , data =
-                            setAt model.cursor (M.EKey newS) model.data
-                                |> Maybe.withDefault model.data
-                        } ! []
+                        newData
+                            |> Result.map (\(newCursor, d) ->
+                                    { model | current = InKey newS, data = d, cursor = newCursor})
+                            |> Result.map noCmd
+                            |> Error.wrapErrorMsg ["while addSymbolChar " ++ toString model.cursor ]
 
-                _ -> (model, Cmd.none)
-        _ -> (model, Cmd.none)
 
-endSymbol :  Msg -> ModelInner -> (ModelInner, Cmd Msg)
+                _ -> Err <| Error.make "In invalid state, not InKey"
+
+endSymbol :  Msg -> ModelInner -> Result Error (ModelInner, Cmd Msg)
 endSymbol msg model =
-    popLast model
+    Cursor.pop cursorTraits model.cursor
+        |> Result.map (\c -> { model | cursor = c })
+        |> Result.andThen popState
+        |> Result.map noCmd
+        |> Error.wrapErrorMsg [ "in endList" ]
+--    popLast model
 
 
 
 
 
 
--- Keycodes
+-- Key codes
 
 
 keyShift = 16

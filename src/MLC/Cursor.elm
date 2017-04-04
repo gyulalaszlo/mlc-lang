@@ -4,77 +4,130 @@ module MLC.Cursor exposing (..)
 
 import Html
 import List.Extra
-
-type alias Cursor k =
-    { path: List k
-    , head: k
-    }
+import Result.Extra
 
 
-from : k -> Cursor k
-from k =
-    { path = []
-    , head = k
-    }
+type Cursor k
+    = Leaf
+    | Nth k (Cursor k)
+--    | Tail
+
+
+leaf : Cursor k
+leaf = Leaf
+
+branch : k -> Cursor k
+branch k = Nth k Leaf
+
+
+
+
 
 push : k -> Cursor k -> Cursor k
-push k c =
-    { c | path = c.head :: c.path, head = k }
-
-pop : Cursor k -> Cursor k
-pop c =
-    case c.path of
-        [] -> c
-        h :: t -> {c | path = t, head = h }
-
---andThen : (List k -> ExprCursor k) -> ExprCursor k -> ExprCursor k
+push k c = Debug.log "Cursor.push:" <| Nth k c
 
 
-type alias Getter k v = k -> v -> Maybe v
-type alias Setter k v = k -> v -> v -> Maybe v
+pop : CursorTraits x k v -> Cursor k -> Result x (Cursor k)
+pop traits c =
+    Debug.log ("Cursor.pop:"  ++ toString c) <|
+        case c of
+            Nth _ cc -> popHelper traits c
+            _ -> Err <| traits.error ("Cannot pop cursor :" ++ toString c)
 
-
-get : Getter k v -> Cursor k -> v -> Maybe v
-get f c v =
-    let val = f c.head v
-    in case c.path of
-        [] -> val
-        p :: ps ->
-            val |> Maybe.andThen (get f (pop c))
-
-
-set : Getter k v -> Setter k v -> Cursor k -> v -> v -> Maybe v
-set getter setter c newValue parent =
-    case c.path of
-        [] -> setter c.head newValue parent
-        p :: ps ->
-                getter c.head parent
-                    |> Maybe.andThen (set getter setter (pop c) newValue)
-                    |> Maybe.andThen (\v -> setter c.head v parent)
+popHelper : CursorTraits x k v -> Cursor k -> Result x (Cursor k)
+popHelper traits c =
+    case c of
+        Nth _  Leaf -> Ok Leaf
+        Nth k cc -> popHelper traits cc |> Result.map (Nth k)
+        _ -> Err <| traits.error "pop() should never reach this fallback"
 
 
 
+type SetPolicy
+    = Replace
+    | InsertTail
 
-type Node
-    = Leaf String
-    | Branch (List Node)
 
-sample =
-    Branch
-        [ Leaf "hello"
-        , Leaf "world"
-        ]
 
-getter : Int -> Node -> Maybe Node
-getter i n =
-    case n of
-        Leaf v -> Nothing
-        Branch ns -> List.Extra.getAt i ns
+type alias ErrorFactory x = (String -> x)
+type alias Getter x k v = Cursor k -> v -> Result x v
+type alias Setter x k v = SetPolicy -> v -> Cursor k -> v -> Result x (Cursor k, v)
+type alias IsLeaf v = v -> Bool
 
-run =
-    get getter (push 0 <| from 0) sample
 
-main =
-    Html.pre [] [
-        Html.text <| toString run
-    ]
+type alias CursorTraits x k v =
+    { getter: Getter x k v
+    , setter: Setter x k v
+    , isLeaf: IsLeaf v
+    , error: ErrorFactory x
+    }
+
+
+
+
+
+recursiveGet : (Maybe k -> v -> Result x v) -> CursorTraits x k v -> Cursor k -> v -> Result x v
+recursiveGet f traits c v =
+    case c of
+        Leaf -> Ok v
+--        Tail -> Ok v
+        Nth k cc ->
+            if traits.isLeaf v then
+                Err <| traits.error <|
+                    "Cannot step into non-leaf node: "
+                    ++ toString v ++ " with Path: " ++ toString c
+            else
+                (traits.getter c v)
+                    |> Result.andThen (\vv -> recursiveGet f traits cc vv)
+
+
+
+get : CursorTraits x k v -> Cursor k -> v -> Result x v
+get traits c v =
+    recursiveGet (\_ v -> Ok v) traits c v
+
+
+
+--recursiveSet : CursorTraits x k v -> SetPolicy -> v -> Cursor k -> v -> Result x v
+--recursiveSet traits policy v c vv =
+--    case c of
+--        Leaf -> Ok v
+----        Tail -> traits.setter policy v c vv
+--        Nth k cc ->
+--            if traits.isLeaf vv then
+--                Err <| traits.error <|
+--                    "Cannot step into non-leaf node: "
+--                    ++ toString vv ++ " with Path: " ++ toString c
+--            else
+--                (traits.getter c vv)
+--                    |> Result.andThen (\oldV -> recursiveSet traits policy v cc oldV)
+--                    |> Result.andThen (\newV -> traits.setter policy newV c vv)
+
+set : CursorTraits x k v -> SetPolicy -> v -> Cursor k -> v -> Result x (Cursor k, v)
+set traits = traits.setter
+
+
+
+type Direction
+    = Up
+    | Down
+    | Left
+    | Right
+
+type Mode
+    = InsertMode
+    | ReplaceMode
+    | NormalMode
+
+type alias Step = (Direction, Int)
+
+type alias Directed v =
+    { up: v
+    , down: v
+    , left: v
+    , right: v
+    }
+
+type alias MapToDirections a b = a -> Directed b
+type alias CanMove a = a -> Directed Bool
+type alias FoldDirection a = Step -> a -> a
