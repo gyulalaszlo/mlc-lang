@@ -66,5 +66,33 @@ update msg model =
 
 view : Model k -> Html Msg
 view model =
-    div [ class "CursorView-view" ]
-        [ text <| toString model ]
+    div [ class "cursor-view" ]
+        [ cursorScopeView model.cursor
+            |> List.intersperse (Html.span [class "cursor-scope-separator"] [ text " "])
+            |> div [ class "cursor-scopes" ]
+        ]
+
+
+cursorBit : Html Msg -> List (Html Msg) -> List (Html Msg)
+cursorBit h els =
+     (Html.span [class "cursor-scope"] [ h ] ) :: els
+
+
+cursorScopeView : Cursor k -> List (Html Msg)
+cursorScopeView cursor =
+     case cursor of
+        Cursor.Leaf ->
+            cursorBit
+                (Html.span
+                    [ class "cursor-scope-leaf"]
+                    [ text "..."])
+                []
+
+        Cursor.Nth k cc ->
+            cursorBit
+                (Html.span
+                    [class "cursor-scope-nth"]
+                    [ text "nth: #"
+                    , text <| toString <| k
+                    ])
+                (cursorScopeView cc)

@@ -23,13 +23,13 @@ toNodeViewModelHelper c e =
             _ -> False
 
         isInPath = case c of
-            Just _ -> True
-            Nothing -> False
+            Just (Cursor.Nth _ Cursor.Leaf) -> True
+            _ -> False
 
 
         nodeSelection = case c of
             Just Cursor.Leaf -> N.IsTarget
-            Just _ -> N.IsInPath
+            Just (Cursor.Nth _ Cursor.Leaf) -> N.IsInPath
             _ -> N.NotSelected
 
 

@@ -213,8 +213,8 @@ view {state} =
     div [ class "StructureEditor-view mkz-view" ]
         [ Html.map CursorViewMsg <| CursorView.view state.cursorView
         , Html.map NodeTreeMsg <| NodeTree.view state.nodeTree
-        , lastKeyView state.lastKeys
-        , stackView state
+--        , lastKeyView state.lastKeys
+--        , stackView state
         , case state.error of
             Nothing -> text ""
             Just err ->

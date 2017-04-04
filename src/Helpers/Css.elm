@@ -11,14 +11,21 @@ css = Html.node "style"
         [Html.text cssBody ]
 
 
+black = "#272822"
+pink = "#f92672"
+cyan = "#66d9ef"
+green = "#a6e22e"
+orange = "#fd971f"
+
 cssBody : String
 cssBody = """
 
 .mkz-view { position:absolute; overflow:hidden; height:100%; width:100%; }
 .mkz-view { font-family: Arial, Verdana, sans-serif; padding:0; margin:0; font-size: 13px; }
-.mkz-view { background: #222; color: #999;}
+.mkz-view { background: #272822; color: #ddd;}
 
 
+.mkz-view .cursor-scopes,
 .mkz-view code,
 .mkz-view pre,
 .mkz-view button { font-family: "Fira Code", Monaco, Courier New; font-size: 12px; }
@@ -45,6 +52,20 @@ cssBody = """
 
 
 
+/* CURSOR-VIEW */
+
+
+.mkz-view .cursor-view {   }
+.mkz-view .cursor-scopes { background: #333;  }
+.mkz-view .cursor-scope { display: inline-block; line-height: 1.4em; padding: 0.4em 1em;  border-radius: 2em; }
+
+.mkz-view .cursor-scope-separator { border-right: 3px solid; border-radius: 2em; color: #555; }
+.mkz-view .cursor-scope-separator:after { content: "->" }
+
+.mkz-view .cursor-scope-nth,
+.mkz-view .cursor-scope-leaf {  }
+
+
 
 .mkz-view .node-view {  }
 .mkz-view .node-view.is-target { color: #f70; background: #532; }
@@ -59,8 +80,8 @@ cssBody = """
 .mkz-view .node-tree-view code { font-size: 15px; }
 
 
-.node-tree-view { padding: 0 0 0 2em; background: #111; }
-.node-tree-view-inner {  background: #222; padding: 0.3em, 1em; }
+.node-tree-view { padding: 0 0 0 2em; }
+.node-tree-view-inner {  padding: 0.3em, 1em; }
 .node-tree-view-pre { white-space: pre-wrap; }
 
 
