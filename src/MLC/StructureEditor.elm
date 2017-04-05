@@ -16,6 +16,8 @@ import MLC.StateMachine as StateMachine exposing (StateMachine, Transition, isIn
 import Result.Extra
 import SEd.NodeTree as NodeTree
 import SEd.CursorView as CursorView
+import SEd.UndoStack as UndoStack
+import SEd.Operations exposing (Operation(InsertNodeAt))
 import Set
 import Update
 
@@ -34,6 +36,7 @@ type Node k v
 
 type alias SM =  StateMachine Error Msg ModelInner
 type alias Model = SM
+type alias Operation = SEd.Operations.Operation ExpressionCursor M.Expression
 --type alias Model = Result Error SM
 
 type alias ModelInner =
@@ -50,6 +53,10 @@ type alias ModelInner =
 
     -- Sub component: CursorView
     , cursorView: CursorView.Model Int
+
+    -- Sub component: UndoStack
+    , undoStack: UndoStack.Model ExpressionCursor M.Expression
+
 
 
 
@@ -82,6 +89,9 @@ initialModelInner =
 --    , nodeView = SEd.NodeView.initialModel
      , nodeTree = NodeTree.initialModel
      , cursorView = CursorView.initialModel
+     , undoStack = UndoStack.initialModel
+
+
     }
 
 
@@ -102,6 +112,7 @@ type Msg
 
     | NodeTreeMsg NodeTree.Msg
     | CursorViewMsg CursorView.Msg
+    | UndoStackMsg (UndoStack.Msg ExpressionCursor M.Expression)
 
 
     | NoOp
@@ -172,6 +183,13 @@ updateChildren msg model =
             in
                 ({ model | cursorView = sm }, Cmd.map CursorViewMsg sc)
 
+        UndoStackMsg m ->
+            let
+                (sm, sc) = UndoStack.update m model.undoStack
+            in
+                ({ model | undoStack = sm }, Cmd.map UndoStackMsg sc)
+
+
         _ -> (model, Cmd.none)
 
 
@@ -213,8 +231,10 @@ view {state} =
     div [ class "StructureEditor-view mkz-view" ]
         [ Html.map CursorViewMsg <| CursorView.view state.cursorView
         , Html.map NodeTreeMsg <| NodeTree.view state.nodeTree
+        , Html.map UndoStackMsg <| UndoStack.view state.undoStack
 --        , lastKeyView state.lastKeys
 --        , stackView state
+--        , text <| toString state.history
         , case state.error of
             Nothing -> text ""
             Just err ->
@@ -309,6 +329,11 @@ mlcEditorTransitions =
 
 -- HANDLERS
 
+{-| Adds an operation to the undo stack
+-}
+addOperation : Operation -> ModelInner -> ModelInner
+addOperation op model =
+    { model | undoStack = UndoStack.push op model.undoStack }
 
 
 
@@ -331,10 +356,12 @@ pushNew e state model =
             { model
             | current = state
             , stack = model.current :: model.stack
+--            , history = (InsertNodeAt model.cursor e) :: model.history
             }
     in
         (newCursorAndData model)
             |> Result.map updateStackAndState
+            |> Result.map (\model -> addOperation (InsertNodeAt model.cursor e) model)
             |> Result.map noCmd
             |> Error.wrapErrorMsg ["while pushNew " ++ toString e ]
 
@@ -355,6 +382,7 @@ startList :  Msg -> ModelInner -> UpdateChain
 startList msg model =
     pushNew (M.EList []) InList model
         |> Update.fromResult msg
+--        |> Update.mapHandledModel (\model -> addOperation (InsertNodeAt model.cursor ))
 
 
 endList :  Msg -> ModelInner -> UpdateChain

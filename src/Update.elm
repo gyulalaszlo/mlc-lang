@@ -4,6 +4,8 @@ module Update exposing
     , Chain
     , andThen, map
 
+    , mapModel, mapHandledModel
+
     , andThen2
 
     , unhandled, error, handled
@@ -137,3 +139,18 @@ andThen2 fn a b =
 
 
 -}
+
+mapModel : (a -> b) -> Chain x msg a -> Chain x msg b
+mapModel fn c =
+    case c of
+        Error err -> Error err
+        Unhandled msg model -> Unhandled msg (fn model)
+        Handled msg (model, cmd) -> Handled msg (fn model, cmd)
+
+mapHandledModel : (a -> a) -> Chain x msg a -> Chain x msg a
+mapHandledModel fn c =
+    case c of
+--        Error err -> Error err
+--        Unhandled msg model -> Unhandled msg (fn model)
+        Handled msg (model, cmd) -> Handled msg (fn model, cmd)
+        _ -> c
