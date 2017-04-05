@@ -1,4 +1,4 @@
-module MLC.StructureEditor exposing (StateMachineModel, initialStateMachine, subscriptions, update, view, Msg)
+module MLC.StructureEditor exposing (StateMachineModel, initialStateMachine, subscriptions, view, Msg)
 {-| Describe me please...
 |-}
 
@@ -59,9 +59,6 @@ sample = M.EList
 
 type alias UndoStackMessage = UndoStack.Msg ExpressionCursor M.Expression
 
-
---update : SM -> (SM, ExprMsg)
-update = SEd.Update.update
 
 -- SUBSCRIPTIONS
 
@@ -226,7 +223,6 @@ startList :  Msg -> Model -> UpdateChain
 startList msg model =
     pushNew (M.EList []) InList model
         |> Update.fromResult msg
---        |> Update.mapHandledModel (\model -> addOperation (InsertNodeAt model.cursor ))
 
 
 endList :  Msg -> Model -> UpdateChain

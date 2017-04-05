@@ -5,7 +5,8 @@ module MLC.Test exposing (..)
 import AstView.Css
 import Helpers.Css
 import Html
-import MLC.StructureEditor exposing (Msg, StateMachineModel, update, initialStateMachine, subscriptions, view)
+import MLC.StructureEditor exposing (Msg, StateMachineModel, initialStateMachine, subscriptions, view)
+import SEd.Update
 
 
 
@@ -26,6 +27,6 @@ main =
     Html.program
         { init = init
         , view = wrapView
-        , update = update
+        , update = SEd.Update.update
         , subscriptions = subscriptions
         }
