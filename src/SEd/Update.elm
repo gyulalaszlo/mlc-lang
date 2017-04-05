@@ -3,7 +3,7 @@ module SEd.Update exposing (..)
 -}
 
 import Char
-import MLC.StateMachine exposing (StateMachine, transition)
+import MLC.StateMachine exposing (StateMachine, transition, updateState)
 import SEd.Model exposing (Msg(..), Model)
 import SEd.CursorView as CursorView
 import SEd.UndoStack as UndoStack
@@ -17,10 +17,6 @@ type alias SMModel x s c n = StateMachine x (Msg s c n) (Model x s c n)
 noCmd : model -> (model, Cmd msg)
 noCmd model = (model, Cmd.none)
 
-keyLimit = 5
-
---updateState : (s -> s) -> {m | state:s} -> { m | state:s}
---updateState s m = { m | state = s m.state }
 
 update : Msg s c n -> SMModel x s c n -> (SMModel x s c n, Cmd (Msg s c n))
 update msg model =
@@ -94,18 +90,9 @@ updateSplitLayout m model =
 
 
 
--- LEGACY UPDATE
-
-type alias UpdateFn x s c n = Msg s c n ->  Model x s c n -> (Model x s c n, Cmd (Msg s c n))
-
-{-| Wraps updating the inner state of the state machin
--}
-updateState : UpdateFn x s c n -> Msg s c n -> SMModel x s c n -> (SMModel x s c n, Cmd (Msg s c n))
-updateState update msg model =
-    let (sm,sc) = update msg model.state in { model | state = sm } ! [sc]
 
 
-
+keyLimit = 5
 
 updateLastKeys : Msg s c n -> Model x s c n -> (Model x s c n, Cmd (Msg s c n))
 updateLastKeys msg m =
@@ -119,13 +106,13 @@ updateLastKeys msg m =
 updateNodeViewModel : Msg s c n -> Model x s c n -> (Model x s c n, Cmd (Msg s c n))
 updateNodeViewModel msg model =
     ({ model
---    | nodeTree =
---        { nodeView =
---            MLC.NodeViewAdapter.toNodeViewModel
---            model.cursor
---            model.data
---        }
---    , cursorView = CursorView.setCursor (Just model.cursor) model.cursorView
-    | cursorView = CursorView.setCursor (Just model.cursor) model.cursorView
+    | nodeTree =
+        { nodeView =
+            model.traits.toNodeTreeMeta
+                model.cursor
+                model.data
+        }
+    , cursorView = CursorView.setCursor (Just model.cursor) model.cursorView
+--    | cursorView = CursorView.setCursor (Just model.cursor) model.cursorView
     }, Cmd.none)
 

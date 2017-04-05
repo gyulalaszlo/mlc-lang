@@ -97,10 +97,20 @@ isInState : (model -> state) -> state -> model -> Bool
 isInState f s m = (f m) == s
 
 
+---- LEGACY UPDATE
+--
+--type alias UpdateFn x s c n = Msg s c n ->  Model x s c n -> (Model x s c n, Cmd (Msg s c n))
+--
+--{-| Wraps updating the inner state of the state machin
+---}
+--updateState : UpdateFn x s c n -> Msg s c n -> SMModel x s c n -> (SMModel x s c n, Cmd (Msg s c n))
+--updateState update msg model =
+--    let (sm,sc) = update msg model.state in { model | state = sm } ! [sc]
 
 
 
-
+updateState update msg model =
+    let (sm,sc) = update msg model.state in { model | state = sm } ! [sc]
 
 
 

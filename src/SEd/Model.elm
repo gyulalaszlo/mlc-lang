@@ -7,6 +7,7 @@ import Keyboard exposing (KeyCode)
 import SEd.CursorView as CursorView
 import SEd.UndoStack as UndoStack
 import SEd.NodeTree as NodeTree
+import SEd.NodeView as NodeView
 
 type Msg state cursor node
     = KeyPress KeyCode
@@ -53,6 +54,8 @@ type alias Traits state cursor node =
     { initialData: node
     , initialCursor: cursor
     , initialState: state
+
+    , toNodeTreeMeta: (cursor -> node -> NodeView.Model)
 
     , cursorToStringList: (cursor -> List String)
     , stateToString: (state -> String)

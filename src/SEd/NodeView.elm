@@ -9,7 +9,7 @@ module SEd.NodeView exposing
     , leaf, node, leafMeta, nodeMeta
     , LeafMeta, NodeMeta)
 {-| Describe me please...
-|-}
+-}
 
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (class, style)
