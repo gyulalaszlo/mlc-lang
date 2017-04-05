@@ -82,7 +82,7 @@ cssBody = """
 
 .node-tree-view { padding: 0 0 0 2em; }
 .node-tree-view-inner {  padding: 0.3em, 1em; }
-.node-tree-view-pre { white-space: pre-wrap; }
+.node-tree-pre { white-space: pre-wrap; }
 
 
 

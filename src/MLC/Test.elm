@@ -5,14 +5,13 @@ module MLC.Test exposing (..)
 import AstView.Css
 import Helpers.Css
 import Html
-import MLC.StructureEditor exposing (Model, Msg(..), update, initialModel, subscriptions, view)
+import MLC.StructureEditor exposing (Msg, StateMachineModel, update, initialStateMachine, subscriptions, view)
 
 
 
-init : ( Model, Cmd Msg )
+init : ( StateMachineModel, Cmd Msg )
 init =
-    (initialModel, Cmd.none)
---    ( initialModel, Task.perform SetAssembly (Task.succeed CAsmSample.sample) )
+    (initialStateMachine, Cmd.none)
 
 
 wrapView model =
@@ -22,7 +21,7 @@ wrapView model =
         ]
 
 
-main : Program Never Model Msg
+main : Program Never StateMachineModel Msg
 main =
     Html.program
         { init = init

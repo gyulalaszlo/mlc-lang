@@ -1,5 +1,6 @@
 module SEd.CursorView exposing
-    (Model
+    ( Model
+    , Traits
 
     , initialModel
     , setCursor
@@ -13,40 +14,52 @@ module SEd.CursorView exposing
 
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (class)
-import MLC.Cursor as Cursor exposing (Cursor)
+--import MLC.Cursor as Cursor exposing (Cursor)
 
 
 
 -- MODEL
 
 
-type alias Model k =
-    { cursor: Cursor k
+type alias Traits state cursor =
+    { stateToString: state -> String
+    , cursorToStringList: cursor -> List String
     }
 
 
-initialModel : Model k
-initialModel =
-    { cursor = Cursor.leaf
+type alias Model state cursor =
+    { cursor: Maybe cursor
+    , traits: Traits state cursor
     }
 
 
-setCursor : Cursor k -> Model k -> Model k
+initialModel : Traits s c -> Model s c
+initialModel traits =
+    { cursor = Nothing
+    , traits = traits
+    }
+
+
+setCursor : Maybe c -> Model s c -> Model s c
 setCursor c model =
     { model | cursor = c }
+
+
 
 -- MSG
 
 
-type Msg
-    = Noop
+type Msg s c
+    = PushState s
+    | PopState
+    | SetCursor c
 
 
 
 -- SUBSCRIPTIONS
 
 
-subscriptions : Model k -> Sub Msg
+subscriptions : Model s c -> Sub (Msg s c)
 subscriptions model =
     Sub.none
 
@@ -55,44 +68,50 @@ subscriptions model =
 -- UPDATE
 
 
-update : Msg -> Model k -> (Model k, Cmd Msg)
+update : Msg s c -> Model s c -> (Model s c, Cmd (Msg s c))
 update msg model =
     case msg of
-        Noop -> model ! []
+        _ -> (model, Cmd.none)
 
 
 -- VIEW
 
 
-view : Model k -> Html Msg
+view : Model s c -> Html (Msg s c)
 view model =
+    case model.cursor of
+        Nothing -> noCursorView model
+        Just cursor -> hasCursorView (model.traits.cursorToStringList cursor) model
+
+
+cursorScopesDiv : List (Html msg) -> Html msg
+cursorScopesDiv scopes =
+    div [ class "cursor-scopes" ] scopes
+
+
+
+noCursorView : Model s c -> Html (Msg s c)
+noCursorView model =
+    div [ class "cursor-view no-cursor-view" ]
+        [ cursorScopesDiv [ cursorBit <| text "No cursor" ]
+        ]
+
+hasCursorView : List String -> Model s c -> Html (Msg s c)
+hasCursorView cursorStr model =
     div [ class "cursor-view" ]
-        [ cursorScopeView model.cursor
+        [ List.map cursorScopeView cursorStr
             |> List.intersperse (Html.span [class "cursor-scope-separator"] [ text " "])
-            |> div [ class "cursor-scopes" ]
+            |> cursorScopesDiv
         ]
 
 
-cursorBit : Html Msg -> List (Html Msg) -> List (Html Msg)
-cursorBit h els =
-     (Html.span [class "cursor-scope"] [ h ] ) :: els
+cursorBit : Html (Msg  s c) ->  Html (Msg s c)
+cursorBit h =
+     Html.span [class "cursor-scope"] [ h ]
 
 
-cursorScopeView : Cursor k -> List (Html Msg)
-cursorScopeView cursor =
-     case cursor of
-        Cursor.Leaf ->
-            cursorBit
-                (Html.span
-                    [ class "cursor-scope-leaf"]
-                    [ text "..."])
-                []
+cursorScopeView : String -> Html (Msg s c)
+cursorScopeView cursorStr =
+    cursorBit <| text cursorStr
 
-        Cursor.Nth k cc ->
-            cursorBit
-                (Html.span
-                    [class "cursor-scope-nth"]
-                    [ text "nth: #"
-                    , text <| toString <| k
-                    ])
-                (cursorScopeView cc)
+
