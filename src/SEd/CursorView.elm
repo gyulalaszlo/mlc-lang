@@ -1,5 +1,5 @@
 module SEd.CursorView exposing
-    ( Model, StackLevel
+    ( Model
     , Traits
 
     , initialModel
@@ -14,6 +14,7 @@ module SEd.CursorView exposing
 
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (class)
+import SEd.Operations exposing (ScopeMeta)
 
 --import MLC.Cursor as Cursor exposing (Cursor)
 
@@ -21,22 +22,22 @@ import Html.Attributes exposing (class)
 
 -- MODEL
 
-type alias StackLevel =
-    { name: String
-    }
+--type alias ScopeMeta =
+--    { name: String
+--    }
 
 
 type alias Traits state cursor =
     { stateToString: state -> String
     , cursorToStringList: cursor -> List String
-    , stateMeta: state -> StackLevel
+    , stateMeta: state -> ScopeMeta
     , initialState: state
 --    , cursorForState: state -> cursor
     }
 
 type alias Model state cursor =
-    { states: List StackLevel
-    , current: StackLevel
+    { states: List ScopeMeta
+    , current: ScopeMeta
     , traits: Traits state cursor
     }
 
@@ -108,7 +109,7 @@ noCursorView model =
         [ stackScopesDiv [ stackLevel <| text "No cursor" ]
         ]
 
-hasCursorView : List StackLevel -> Model s c -> Html (Msg s c)
+hasCursorView : List ScopeMeta -> Model s c -> Html (Msg s c)
 hasCursorView stack model =
     div [ class "cursor-view" ]
         [ List.map scopeStackLevel stack
@@ -124,15 +125,15 @@ stackLevel h =
      Html.span [class "cursor-scope"] [ h ]
 
 
-scopeStackLevel : StackLevel -> Html (Msg s c)
+scopeStackLevel : ScopeMeta -> Html (Msg s c)
 scopeStackLevel meta =
-    stackLevel <| text meta.name
+    stackLevel <| text meta.displayName
 
-scopeStackHead : StackLevel -> Html (Msg s c)
+scopeStackHead : ScopeMeta -> Html (Msg s c)
 scopeStackHead meta =
     stackLevel <|
         Html.span [ class "head" ]
-             [ text meta.name
+             [ text meta.displayName
              ]
 
 

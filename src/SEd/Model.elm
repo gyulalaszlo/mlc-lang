@@ -4,10 +4,11 @@ module SEd.Model exposing (Model, Traits, fromTraits, Msg(..))
 
 import Helpers.SplitLayout as SplitLayout
 import Keyboard exposing (KeyCode)
-import SEd.CursorView as CursorView exposing (StackLevel)
+import SEd.CursorView as CursorView
 import SEd.UndoStack as UndoStack
 import SEd.NodeTree as NodeTree
 import SEd.NodeView as NodeView
+import SEd.Operations  exposing (ScopeMeta)
 
 type Msg state cursor node
     = KeyPress KeyCode
@@ -61,7 +62,7 @@ type alias Traits state cursor node =
     , stateToString: (state -> String)
     , nodeToString: (node -> String)
 
-    , stateMeta: state -> StackLevel
+    , stateMeta: state -> ScopeMeta
 
     }
 

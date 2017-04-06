@@ -2,8 +2,9 @@ module MLC.Editor.StateInList exposing (..)
 {-| Describe me please...
 -}
 
+import MLC.Editor.Basics exposing (toDisplayString)
 import MLC.Types exposing (..)
-import SEd.CursorView exposing (StackLevel)
+import SEd.Operations exposing (ScopeMeta, ScopeKind(..))
 
 type alias StateInList =
     { elements: List Expression
@@ -15,10 +16,16 @@ initialModel =
     { elements = []
     }
 
+emptyMeta : ScopeMeta
+emptyMeta = { displayName = "()", kind = NodeScope}
 
-meta : StateInList -> StackLevel
+
+meta : StateInList -> ScopeMeta
 meta s =
-    case s.elements of
-        [] -> { name = "()" }
-        EKey s :: _ -> { name = "(:" ++ s ++ "..)" }
-        _ -> { name = "(..)" }
+    { emptyMeta
+        | displayName = toDisplayString (EList s.elements)
+        }
+--    case s.elements of
+--        [] -> emptyMeta
+--        EKey s :: _ -> { emptyMeta | displayName = displa"(:" ++ s ++ "..)" }
+--        _ -> { emptyMeta | displayName = "(..)" }

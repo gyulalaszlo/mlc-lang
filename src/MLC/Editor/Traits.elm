@@ -3,15 +3,16 @@ module MLC.Editor.Traits exposing (..)
 -}
 
 
+import MLC.Editor.Basics exposing (toDisplayString)
 import MLC.ExpressionCursor exposing (ExpressionCursor)
 import MLC.Cursor as Cursor
 import MLC.Types as M
 import MLC.Editor.State as State exposing (State)
 import SEd.Model exposing (Traits)
 import SEd.NodeView as N exposing (leafMeta, nodeMeta)
+import MLC.Editor.StateInKey as StateInKey
 import MLC.Editor.StateInList as StateInList
-import SEd.CursorView exposing (StackLevel)
-
+import SEd.Operations  exposing (ScopeMeta)
 
 traits : Traits State ExpressionCursor M.Expression
 traits =
@@ -90,15 +91,15 @@ toNodeViewModelHelper c e =
                 let meta = { nodeMeta | selection = nodeSelection }
                 in N.node meta <| List.indexedMap convertChild cs
             M.EKey s ->
-                let meta = { leafMeta | isSelected = isSelected, label = s }
+                let meta = { leafMeta | isSelected = isSelected, label = toDisplayString e }
                 in N.leaf meta
 
 
 
-stateStackMeta : State -> StackLevel
+stateStackMeta : State -> ScopeMeta
 stateStackMeta s =
     case s of
-        State.InKey k -> { name = k }
+        State.InKey k -> StateInKey.meta k
         State.InList s -> StateInList.meta s
 
 
