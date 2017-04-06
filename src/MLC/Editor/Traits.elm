@@ -9,6 +9,8 @@ import MLC.Types as M
 import MLC.Editor.State as State exposing (State)
 import SEd.Model exposing (Traits)
 import SEd.NodeView as N exposing (leafMeta, nodeMeta)
+import MLC.Editor.StateInList as StateInList
+import SEd.CursorView exposing (StackLevel)
 
 
 traits : Traits State ExpressionCursor M.Expression
@@ -18,10 +20,11 @@ traits =
     , stateToString = stateToString
 
     , toNodeTreeMeta = toNodeViewModel
+    , stateMeta = stateStackMeta
 
     , initialCursor = Cursor.leaf
     , initialData = M.EList []
-    , initialState = State.InList
+    , initialState = State.InList StateInList.initialModel
     }
 
 
@@ -45,7 +48,7 @@ nodeToString n =
 stateToString : State -> String
 stateToString s =
     case s of
-        State.InList -> "List"
+        State.InList s -> "List"
         State.InKey s -> "Key : " ++ s
 
 
@@ -55,9 +58,7 @@ stateToString s =
 toNodeViewModel : ExpressionCursor -> M.Expression -> N.Model
 toNodeViewModel c e =
     toNodeViewModelHelper (Just c) e
---    case e of
---        M.EList cs -> N.node {} <| List.map toNodeViewModel cs
---        M.EKey s -> N.leaf {}
+
 
 toNodeViewModelHelper : Maybe ExpressionCursor -> M.Expression -> N.Model
 toNodeViewModelHelper c e =
@@ -66,16 +67,11 @@ toNodeViewModelHelper c e =
             Just Cursor.Leaf -> True
             _ -> False
 
-        isInPath = case c of
-            Just (Cursor.Nth _ Cursor.Leaf) -> True
-            _ -> False
-
 
         nodeSelection = case c of
             Just Cursor.Leaf -> N.IsTarget
             Just (Cursor.Nth _ Cursor.Leaf) -> N.IsInPath
             _ -> N.NotSelected
-
 
 
 
@@ -87,11 +83,6 @@ toNodeViewModelHelper c e =
 
         convertChild i child =
             toNodeViewModelHelper (cursorFor i child) child
---            Maybe.map (\cc ->
---                case cc of
---                    Cursor.Leaf -> Nothing
---                    Cursor.Nth k ccc ->
---                        if k == i then Just ccc else Nothing
 
     in
         case e of
@@ -101,3 +92,13 @@ toNodeViewModelHelper c e =
             M.EKey s ->
                 let meta = { leafMeta | isSelected = isSelected, label = s }
                 in N.leaf meta
+
+
+
+stateStackMeta : State -> StackLevel
+stateStackMeta s =
+    case s of
+        State.InKey k -> { name = k }
+        State.InList s -> StateInList.meta s
+
+

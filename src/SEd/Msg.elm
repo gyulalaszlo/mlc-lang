@@ -1,3 +1,0 @@
-module SEd.Msg exposing (..)
-{-| Describe me please...
--}

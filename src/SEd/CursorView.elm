@@ -1,9 +1,9 @@
 module SEd.CursorView exposing
-    ( Model
+    ( Model, StackLevel
     , Traits
 
     , initialModel
-    , setCursor
+    , setState
 
     , Msg(..)
     , subscriptions
@@ -14,35 +14,47 @@ module SEd.CursorView exposing
 
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (class)
+
 --import MLC.Cursor as Cursor exposing (Cursor)
 
 
 
 -- MODEL
 
+type alias StackLevel =
+    { name: String
+    }
+
 
 type alias Traits state cursor =
     { stateToString: state -> String
     , cursorToStringList: cursor -> List String
+    , stateMeta: state -> StackLevel
+    , initialState: state
+--    , cursorForState: state -> cursor
     }
 
-
 type alias Model state cursor =
-    { cursor: Maybe cursor
+    { states: List StackLevel
+    , current: StackLevel
     , traits: Traits state cursor
     }
 
 
 initialModel : Traits s c -> Model s c
 initialModel traits =
-    { cursor = Nothing
+    { states = []
+    , current = traits.stateMeta traits.initialState
     , traits = traits
     }
 
 
-setCursor : Maybe c -> Model s c -> Model s c
-setCursor c model =
-    { model | cursor = c }
+setState : s -> List s -> Model s c -> Model s c
+setState s ss model =
+    { model
+        | current = model.traits.stateMeta s
+        , states = List.map model.traits.stateMeta ss
+        }
 
 
 
@@ -79,13 +91,13 @@ update msg model =
 
 view : Model s c -> Html (Msg s c)
 view model =
-    case model.cursor of
-        Nothing -> noCursorView model
-        Just cursor -> hasCursorView (model.traits.cursorToStringList cursor) model
+    case model.states of
+        [] -> noCursorView model
+        _ -> hasCursorView model.states model
 
 
-cursorScopesDiv : List (Html msg) -> Html msg
-cursorScopesDiv scopes =
+stackScopesDiv : List (Html msg) -> Html msg
+stackScopesDiv scopes =
     div [ class "cursor-scopes" ] scopes
 
 
@@ -93,25 +105,37 @@ cursorScopesDiv scopes =
 noCursorView : Model s c -> Html (Msg s c)
 noCursorView model =
     div [ class "cursor-view no-cursor-view" ]
-        [ cursorScopesDiv [ cursorBit <| text "No cursor" ]
+        [ stackScopesDiv [ stackLevel <| text "No cursor" ]
         ]
 
-hasCursorView : List String -> Model s c -> Html (Msg s c)
-hasCursorView cursorStr model =
+hasCursorView : List StackLevel -> Model s c -> Html (Msg s c)
+hasCursorView stack model =
     div [ class "cursor-view" ]
-        [ List.map cursorScopeView cursorStr
-            |> List.intersperse (Html.span [class "cursor-scope-separator"] [ text " "])
-            |> cursorScopesDiv
+        [ List.map scopeStackLevel stack
+                |> List.append [ scopeStackHead model.current ]
+                |> List.intersperse (Html.span [class "cursor-scope-separator"] [ text " "])
+                |> List.reverse
+                |> stackScopesDiv
         ]
 
 
-cursorBit : Html (Msg  s c) ->  Html (Msg s c)
-cursorBit h =
+stackLevel : Html (Msg  s c) ->  Html (Msg s c)
+stackLevel h =
      Html.span [class "cursor-scope"] [ h ]
 
 
-cursorScopeView : String -> Html (Msg s c)
-cursorScopeView cursorStr =
-    cursorBit <| text cursorStr
+scopeStackLevel : StackLevel -> Html (Msg s c)
+scopeStackLevel meta =
+    stackLevel <| text meta.name
 
+scopeStackHead : StackLevel -> Html (Msg s c)
+scopeStackHead meta =
+    stackLevel <|
+        Html.span [ class "head" ]
+             [ text meta.name
+             ]
+
+
+
+-- SCOPE VIEW
 

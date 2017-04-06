@@ -65,10 +65,12 @@ cssBody = """
 .mkz-view .cursor-scope-nth,
 .mkz-view .cursor-scope-leaf {  }
 
+.mkz-view .cursor-scope .head {  color: #fd971f; }
+
 
 
 .mkz-view .node-view {  }
-.mkz-view .node-view.is-target { color: #f70; background: #532; }
+.mkz-view .node-view.is-target { color: #fd971f; background: #532; }
 .mkz-view .node-view.is-in-path { color: #c95; }
 
 .mkz-view .leaf {  }

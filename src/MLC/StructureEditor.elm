@@ -6,10 +6,9 @@ import CAsm.Error as Error exposing (Error)
 import Char
 import List.Extra
 import MLC.Cursor as Cursor
-import MLC.Editor.State exposing (State(..))
+import MLC.Editor.State as State exposing (State(..))
 import MLC.Editor.Traits
 import MLC.ExpressionCursor exposing (ExpressionCursor, cursorTraits)
-import MLC.NodeViewAdapter exposing (toNodeViewModel)
 import MLC.Types as M
 import Helpers.SplitLayout as SplitLayout
 import Html exposing (Html, div, span, text)
@@ -42,7 +41,7 @@ type alias SM =  StateMachine Error Msg Model
 type alias StateMachineModel = SM
 type alias Operation = SEd.Operations.Operation ExpressionCursor M.Expression
 
-type alias Model = SEd.Model.Model Error MLC.Editor.State.State ExpressionCursor M.Expression
+type alias Model = SEd.Model.Model Error State ExpressionCursor M.Expression
 
 initialStateMachine : StateMachineModel
 initialStateMachine =  stateMachine (fromTraits MLC.Editor.Traits.traits) mlcEditorTransitions
@@ -149,7 +148,7 @@ inAnyState = isInAnyState
 
 inList m =
     case m.current of
-        InList -> True
+        InList _ -> True
         _ -> False
 
 inKey m =
@@ -190,14 +189,12 @@ pushNew e state model =
 
         newCursorAndData model =
             Cursor.set cursorTraits Cursor.InsertTail e model.cursor model.data
-                |> Debug.log ("pushNew " ++ toString e ++ " " ++ toString model.cursor ++ "//")
                 |> Result.map (\(newCursor, data) -> { model | data = data, cursor = newCursor })
 
         updateStackAndState model =
             { model
             | current = state
             , stack = model.current :: model.stack
---            , history = (InsertNodeAt model.cursor e) :: model.history
             }
     in
         (newCursorAndData model)
@@ -221,7 +218,7 @@ popState model =
 
 startList :  Msg -> Model -> UpdateChain
 startList msg model =
-    pushNew (M.EList []) InList model
+    pushNew (M.EList []) State.inList model
         |> Update.fromResult msg
 
 

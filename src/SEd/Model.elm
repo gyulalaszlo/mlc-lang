@@ -4,7 +4,7 @@ module SEd.Model exposing (Model, Traits, fromTraits, Msg(..))
 
 import Helpers.SplitLayout as SplitLayout
 import Keyboard exposing (KeyCode)
-import SEd.CursorView as CursorView
+import SEd.CursorView as CursorView exposing (StackLevel)
 import SEd.UndoStack as UndoStack
 import SEd.NodeTree as NodeTree
 import SEd.NodeView as NodeView
@@ -61,13 +61,18 @@ type alias Traits state cursor node =
     , stateToString: (state -> String)
     , nodeToString: (node -> String)
 
+    , stateMeta: state -> StackLevel
+
     }
 
 
 cursorTraits : Traits s c n -> CursorView.Traits s c
-cursorTraits { cursorToStringList, stateToString } =
+cursorTraits { cursorToStringList, stateToString, stateMeta, initialState } =
     { cursorToStringList = cursorToStringList
     , stateToString = stateToString
+    , stateMeta = stateMeta
+
+    , initialState = initialState
     }
 
 
@@ -88,6 +93,7 @@ fromTraits traits =
 
     , error = Nothing
     , nodeTree = NodeTree.initialModel
+--    , cursorView = CursorView.initialModel traits
     , cursorView = CursorView.initialModel <| cursorTraits traits
     , undoStack =  UndoStack.modelFromTraits <| undoStackTraits traits
     , splitLayout = SplitLayout.initialModel

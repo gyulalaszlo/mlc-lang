@@ -1,7 +1,6 @@
 module SEd.Operations exposing (..)
 {-| Defines possible operations
 -}
-import MLC.Cursor as Cursor exposing (Cursor)
 
 
 type Mode

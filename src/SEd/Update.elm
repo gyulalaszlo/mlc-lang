@@ -106,13 +106,13 @@ updateLastKeys msg m =
 updateNodeViewModel : Msg s c n -> Model x s c n -> (Model x s c n, Cmd (Msg s c n))
 updateNodeViewModel msg model =
     ({ model
-    | nodeTree =
-        { nodeView =
-            model.traits.toNodeTreeMeta
-                model.cursor
-                model.data
+        | nodeTree =
+            { nodeView =
+                model.traits.toNodeTreeMeta
+                    model.cursor
+                    model.data
         }
-    , cursorView = CursorView.setCursor (Just model.cursor) model.cursorView
+    , cursorView = CursorView.setState model.current model.stack model.cursorView
 --    | cursorView = CursorView.setCursor (Just model.cursor) model.cursorView
     }, Cmd.none)
 
