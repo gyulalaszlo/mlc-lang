@@ -10,5 +10,5 @@ toDisplayString e =
         EList [] -> "()"
         EList [EList (x :: _)] -> toDisplayString x
         EList [x] -> "(" ++ toDisplayString x ++ ")"
-        EList (x :: _) -> "(" ++ toDisplayString x ++ " ...)"
+        EList (x :: _) -> "(" ++ toDisplayString x ++ "..)"
         EKey s -> ":" ++ s

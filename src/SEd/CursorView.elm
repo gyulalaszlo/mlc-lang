@@ -16,7 +16,6 @@ import Html exposing (Html, div, text)
 import Html.Attributes exposing (class)
 import SEd.Operations exposing (ScopeMeta)
 
---import MLC.Cursor as Cursor exposing (Cursor)
 
 
 

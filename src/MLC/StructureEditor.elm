@@ -191,6 +191,12 @@ pushNew e state model =
             Cursor.set cursorTraits Cursor.InsertTail e model.cursor model.data
                 |> Result.map (\(newCursor, data) -> { model | data = data, cursor = newCursor })
 
+        addToScope model =
+            case model.current of
+                State.InList ss -> { model | current = State.InList <| { ss | elements = ss.elements ++ [e] }}
+                _ -> model
+
+
         updateStackAndState model =
             { model
             | current = state
@@ -198,6 +204,7 @@ pushNew e state model =
             }
     in
         (newCursorAndData model)
+            |> Result.map addToScope
             |> Result.map updateStackAndState
             |> Result.map (\model -> addOperation (InsertNodeAt model.cursor e) model)
             |> Result.map noCmd
