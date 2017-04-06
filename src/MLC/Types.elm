@@ -4,7 +4,6 @@ module MLC.Types exposing (..)
 
 import Char
 import List.Extra
-import MLC.StateMachine exposing (Transition)
 import Set
 
 

@@ -3,6 +3,7 @@ module MLC.Editor.Traits exposing (..)
 -}
 
 
+import CAsm.Error as Error exposing (Error)
 import MLC.Editor.Basics exposing (toDisplayString)
 import MLC.ExpressionCursor exposing (ExpressionCursor)
 import MLC.Cursor as Cursor
@@ -14,11 +15,12 @@ import MLC.Editor.StateInKey as StateInKey
 import MLC.Editor.StateInList as StateInList
 import SEd.Operations  exposing (ScopeMeta)
 
-traits : Traits State ExpressionCursor M.Expression
+traits : Traits Error State ExpressionCursor M.Expression
 traits =
     { cursorToStringList = cursorToString
     , nodeToString = nodeToString
     , stateToString = stateToString
+    , errorToStringList = errorToStringList
 
     , toNodeTreeMeta = toNodeViewModel
     , stateMeta = stateStackMeta
@@ -103,3 +105,10 @@ stateStackMeta s =
         State.InList s -> StateInList.meta s
 
 
+
+
+-- ERRORS
+
+errorToStringList : Error -> List String
+errorToStringList e =
+    [Error.errorToString e]

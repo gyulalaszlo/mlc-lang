@@ -17,4 +17,5 @@ emptyMeta = { displayName = "()", kind = NodeScope}
 
 meta : StateInKey -> ScopeMeta
 meta s =
-    { emptyMeta | displayName = toDisplayString (EKey s) }
+    { emptyMeta
+    | displayName = toDisplayString (EKey s) }

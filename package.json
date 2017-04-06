@@ -5,7 +5,8 @@
     "elm": "^0.18.0"
   },
   "scripts": {
-    "build": "elm-make src/Bootstrap.elm --output=lib/bootstrap.js",
+    "build": "elm-make src/Bootstrap.elm --output=/tmp/mlc.js",
+    "build-sed": "elm-make src/MLC/Test.elm --output=/tmp/mlc.js",
     "format": "elm-format --yes src/"
 
   }

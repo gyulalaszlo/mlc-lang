@@ -46,12 +46,12 @@ type alias Model error state cursor node =
     -- Sub component: SplitLayout
     , splitLayout: SplitLayout.Model
 
-    , traits: Traits state cursor node
+    , traits: Traits error state cursor node
     }
 
 
 
-type alias Traits state cursor node =
+type alias Traits error state cursor node =
     { initialData: node
     , initialCursor: cursor
     , initialState: state
@@ -61,13 +61,14 @@ type alias Traits state cursor node =
     , cursorToStringList: (cursor -> List String)
     , stateToString: (state -> String)
     , nodeToString: (node -> String)
+    , errorToStringList: error -> List String
 
     , stateMeta: state -> ScopeMeta
 
     }
 
 
-cursorTraits : Traits s c n -> CursorView.Traits s c
+cursorTraits : Traits x s c n -> CursorView.Traits s c
 cursorTraits { cursorToStringList, stateToString, stateMeta, initialState } =
     { cursorToStringList = cursorToStringList
     , stateToString = stateToString
@@ -77,14 +78,14 @@ cursorTraits { cursorToStringList, stateToString, stateMeta, initialState } =
     }
 
 
-undoStackTraits : Traits s c n -> UndoStack.Traits c n
+undoStackTraits : Traits x s c n -> UndoStack.Traits c n
 undoStackTraits { cursorToStringList, nodeToString } =
     { cursorToStringList = cursorToStringList
     , nodeToString = nodeToString
     }
 
 
-fromTraits : Traits s c n -> Model x s c n
+fromTraits : Traits x s c n -> Model x s c n
 fromTraits traits =
     { current = traits.initialState
     , stack = []
@@ -94,7 +95,6 @@ fromTraits traits =
 
     , error = Nothing
     , nodeTree = NodeTree.initialModel
---    , cursorView = CursorView.initialModel traits
     , cursorView = CursorView.initialModel <| cursorTraits traits
     , undoStack =  UndoStack.modelFromTraits <| undoStackTraits traits
     , splitLayout = SplitLayout.initialModel

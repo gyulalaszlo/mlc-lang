@@ -1,4 +1,4 @@
-module MLC.StructureEditor exposing (StateMachineModel, initialStateMachine, subscriptions, view, Msg)
+module MLC.StructureEditor exposing (StateMachineModel, initialStateMachine, subscriptions, Msg)
 {-| Describe me please...
 |-}
 
@@ -14,14 +14,13 @@ import Helpers.SplitLayout as SplitLayout
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class)
 import Keyboard exposing (KeyCode)
-import MLC.StateMachine as StateMachine exposing (StateMachine, Transition, isInAnyState, isInState, stateMachine, transition)
 import Result.Extra
 import SEd.Model exposing (Model, Msg(..), fromTraits)
 import SEd.NodeTree as NodeTree
 import SEd.CursorView as CursorView
 import SEd.UndoStack as UndoStack
 import SEd.Operations exposing (Operation(InsertNodeAt))
-import SEd.Update
+import SEd.StateMachine as StateMachine exposing (StateMachine, Transition,  isInAnyState, isInState, stateMachine, transition)
 import Set
 import Update
 
@@ -85,37 +84,7 @@ andThenUpdate fn msg (model, cmd) = let (sm, sc) = fn msg model in sm ! [sc, cmd
 
 
 
--- UPDATE
 
-
--- VIEW
-
-
-
-view : StateMachineModel -> Html Msg
-view {state} =
-    div [ class "StructureEditor-view mkz-view" ]
-        [ Html.map CursorViewMsg <| CursorView.view state.cursorView
-        , SplitLayout.view
-                state.splitLayout
-                [ Html.map NodeTreeMsg <| NodeTree.view state.nodeTree
-                , Html.map UndoStackMsg <| UndoStack.view state.undoStack
-                ]
-
-        , case state.error of
-            Nothing -> text ""
-            Just err ->
-                div [class "error"]
-                    [ Html.pre []
-                        [ text <| Error.errorToString err
-                        ]
-                    ]
-        ]
-
-
-
-
--- STATE MACHINE
 
 
 

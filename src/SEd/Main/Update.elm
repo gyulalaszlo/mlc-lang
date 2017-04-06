@@ -1,9 +1,9 @@
-module SEd.Update exposing (..)
+module SEd.Main.Update exposing (..)
 {-| the update method of the Elm architecture spread into bits
 -}
 
 import Char
-import MLC.StateMachine exposing (StateMachine, transition, updateState)
+import SEd.StateMachine exposing (StateMachine, transition, updateState)
 import SEd.Model exposing (Msg(..), Model)
 import SEd.CursorView as CursorView
 import SEd.UndoStack as UndoStack
