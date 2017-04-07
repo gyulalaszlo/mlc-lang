@@ -133,6 +133,8 @@ scopeStackHead meta =
     stackLevel <|
         Html.span [ class "head" ]
              [ text meta.displayName
+             , text " "
+             , text <| toString meta.supports
              ]
 
 

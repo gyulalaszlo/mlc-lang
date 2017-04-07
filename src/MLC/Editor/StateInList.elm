@@ -4,7 +4,7 @@ module MLC.Editor.StateInList exposing (..)
 
 import MLC.Editor.Basics exposing (toDisplayString)
 import MLC.Types exposing (..)
-import SEd.Operations exposing (ScopeMeta, ScopeKind(..))
+import SEd.Operations exposing (ScopeKind(..), ScopeMeta, listOperationIds)
 
 type alias StateInList =
     { elements: List Expression
@@ -17,7 +17,7 @@ initialModel =
     }
 
 emptyMeta : ScopeMeta
-emptyMeta = { displayName = "()", kind = NodeScope}
+emptyMeta = { displayName = "()", kind = NodeScope, supports = listOperationIds }
 
 
 meta : StateInList -> ScopeMeta

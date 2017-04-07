@@ -19,29 +19,19 @@ type alias SM x s c n = StateMachine x (Msg s c n) (Model x s c n) -> Html (Msg 
 view : StateMachine x (Msg s c n) (Model x s c n) -> Html (Msg s c n)
 view {state} =
     div [ class "StructureEditor-view mkz-view" ]
-        [ Html.map CursorViewMsg <| CursorView.view state.cursorView
-        , Bsp.view <| mainView state
---        , SplitLayout.view
---                state.splitLayout
---                [ nodeTreeSplit state
---                , undoStackSplit state
---                ]
-
+        [ Bsp.view <| mainView state
         , errorView state
---        , case state.error of
---            Nothing -> text ""
---            Just err ->
---                div [class "error"]
---                    [ Html.pre []
---                        [ text <|  String.join "\n\n"  <|
---                            state.traits.errorToStringList  err
---                        ]
---                    ]
         ]
 
 
 
-nodeTreeView model = Bsp.leaf <| Html.map NodeTreeMsg <| NodeTree.view model.nodeTree
+nodeTreeView model = Bsp.leaf <|
+    Html.div []
+        [ Html.map CursorViewMsg <| CursorView.view model.cursorView
+        , Html.map NodeTreeMsg <| NodeTree.view model.nodeTree
+        ]
+
+
 undoStackView model = Bsp.leaf <| Html.map UndoStackMsg <| UndoStack.view model.undoStack
 
 mainView model = Bsp.horizontal (Bsp.FixedB <| Css.Pixel 250) (nodeTreeView model) (undoStackView model)

@@ -7,12 +7,44 @@ type Mode
     = Normal
     | Insert
 
+
+
 type Operation cursor node
     = InsertNodeAt cursor node
     | ReplaceNodeAt cursor node
     | DeleteNodeAt cursor
 
-    -- | MoveCursorTo cursor
+
+
+insertNodeAtId = 0xff01
+replaceNodeAtId = 0xff02
+deleteNodeAtId = 0xff03
+
+
+listOperationIds : List OperationId
+listOperationIds = [ insertNodeAtId, replaceNodeAtId, deleteNodeAtId ]
+
+leafOperationIds : List OperationId
+leafOperationIds = [ ]
+
+
+idOf : Operation cursor node -> OperationId
+idOf op =
+    case op of
+        InsertNodeAt _ _ -> insertNodeAtId
+        ReplaceNodeAt _ _ -> replaceNodeAtId
+        DeleteNodeAt _ -> deleteNodeAtId
+
+
+
+type alias OperationId = Int
+
+type alias OperationMeta =
+    { name: String
+    , id: OperationId
+    }
+
+
 
 
 
@@ -25,6 +57,7 @@ type ScopeKind
 type alias ScopeMeta =
     { displayName: String
     , kind: ScopeKind
+    , supports: List OperationId
     }
 
 
