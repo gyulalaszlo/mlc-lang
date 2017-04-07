@@ -2,6 +2,8 @@ module Helpers.Css exposing (..)
 {-| Describe me please...
 -}
 
+import Color
+import Helpers.BSPSplitView
 import Html exposing (Html)
 import Html.Attributes
 
@@ -16,6 +18,8 @@ pink = "#f92672"
 cyan = "#66d9ef"
 green = "#a6e22e"
 orange = "#fd971f"
+
+pinkColor = Color.rgb 0xf9 0x26 0x72
 
 cssBody : String
 cssBody = """
@@ -136,4 +140,7 @@ cssBody = """
 ::-webkit-scrollbar-thumb { border-radius: 10px; background: rgba(255,255,255,0.1);  }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.1);  }
 
-"""
+
+
+""" ++ Helpers.BSPSplitView.css { hoverBackground = pinkColor
+                                , normalBackground = (Color.rgba 0 0 0 0.1) }

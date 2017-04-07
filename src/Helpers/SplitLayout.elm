@@ -1,4 +1,15 @@
-module Helpers.SplitLayout exposing (Model, initialModel, Msg(..), subscriptions, update, view, Direction(..))
+module Helpers.SplitLayout exposing
+    ( Model
+    , initialModel
+
+    , Msg(..)
+
+    , subscriptions
+
+    , update, view
+
+    , Direction(..)
+    )
 {-| Describe me please...
 |-}
 
@@ -80,3 +91,6 @@ singlePane v styles model =
         , styles
         ]
         [ v ]
+
+
+
