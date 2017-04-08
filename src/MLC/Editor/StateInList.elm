@@ -17,7 +17,11 @@ initialModel =
     }
 
 emptyMeta : ScopeMeta
-emptyMeta = { displayName = "()", kind = NodeScope, supports = listOperationIds }
+emptyMeta =
+    { displayName = "()"
+    , kind = NodeScope
+    , supports = listOperationIds
+    }
 
 
 meta : StateInList -> ScopeMeta
@@ -25,6 +29,9 @@ meta s =
     { emptyMeta
         | displayName = toDisplayString (EList s.elements)
         }
+
+
+
 --    case s.elements of
 --        [] -> emptyMeta
 --        EKey s :: _ -> { emptyMeta | displayName = displa"(:" ++ s ++ "..)" }

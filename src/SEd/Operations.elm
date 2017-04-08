@@ -15,6 +15,7 @@ type Operation cursor node
     | DeleteNodeAt cursor
 
 
+-- OPERATION IDS
 
 insertNodeAtId = 0xff01
 replaceNodeAtId = 0xff02
@@ -27,23 +28,24 @@ listOperationIds = [ insertNodeAtId, replaceNodeAtId, deleteNodeAtId ]
 leafOperationIds : List OperationId
 leafOperationIds = [ ]
 
-
-idOf : Operation cursor node -> OperationId
-idOf op =
-    case op of
-        InsertNodeAt _ _ -> insertNodeAtId
-        ReplaceNodeAt _ _ -> replaceNodeAtId
-        DeleteNodeAt _ -> deleteNodeAtId
+--
+--idOf : Operation cursor node -> OperationMeta
+--idOf op =
+--    case op of
+--        InsertNodeAt _ _ -> insertNodeAtId
+--        ReplaceNodeAt _ _ -> replaceNodeAtId
+--        DeleteNodeAt _ -> deleteNodeAtId
 
 
 
 type alias OperationId = Int
 
 type alias OperationMeta =
-    { name: String
-    , id: OperationId
-    }
-
+  { name: String
+  , id: Int
+  , description: String
+  , params: List String
+  }
 
 
 
@@ -75,6 +77,13 @@ type alias ScopeTraits v =
 
 
 
+
+
+
+-- SCOPE NAMES
+
+--operationName : OperationId -> Maybe OperationMeta
+--operationName
 
 {-
 

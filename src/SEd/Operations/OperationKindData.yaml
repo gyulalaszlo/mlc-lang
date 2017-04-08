@@ -1,0 +1,58 @@
+"Editor":
+  operations:
+    - name: Start
+      id: 0xaa00
+    - name: Stop
+      id: 0xaa00
+  children:
+    - Cursor
+    - Node
+
+Cursor:
+  typeParams: [cursor]
+  operations:
+    - name: Set
+      id: 0xcc00
+      params: [cursor]
+      description: Sets the editing cursor to a new value
+  children:
+    - Move
+
+Move:
+  operations:
+    - name: Up
+      id: 0xcc10
+      description: Move the editing cursor up a logical level.
+
+    - name: Down
+      id: 0xcc11
+      description: Move the editing cursor down a logical level.
+
+    - name: Left
+      id: 0xcc10
+      description: Move the editing cursor left at the logical level.
+
+    - name: Right
+      id: 0xcc11
+      description: Move the editing cursor right at the logical level.
+
+Node:
+  typeParams: [cursor, node]
+  operations:
+    - name: Insert
+      id: 0xff01
+      params: [node]
+      returns: [context, cursor]
+      description: Inserts a new node at the current editing cursor.
+
+
+    - name: Delete
+      id: 0xff02
+      description: Deletes the currently selected node.
+
+    - name: Replace
+      id: 0xff02
+      params: [ node ]
+      description: Replaces the currently selected node with the given new node.
+
+
