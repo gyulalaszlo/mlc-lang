@@ -105,14 +105,16 @@ updateLastKeys msg m =
 
 updateNodeViewModel : Msg s c n -> Model x s c n -> (Model x s c n, Cmd (Msg s c n))
 updateNodeViewModel msg model =
-    ({ model
-        | nodeTree =
-            { nodeView =
-                model.traits.toNodeTreeMeta
-                    model.cursor
-                    model.data
-        }
-    , cursorView = CursorView.setState model.current model.stack model.cursorView
---    | cursorView = CursorView.setCursor (Just model.cursor) model.cursorView
-    }, Cmd.none)
+    let newTree = model.traits.toNodeTreeMeta model.cursor model.data
+    in
+       ({ model | nodeTree = NodeTree.setRoot newTree model.nodeTree
+                , cursorView = CursorView.setState model.current model.stack model.cursorView
+                }
+       , Cmd.none)
 
+
+
+operationFromMsg : Msg s c n -> Model x s c n -> (Model x s c n, Cmd (Msg s c n))
+operationFromMsg msg model =
+    case msg of
+        KeyPress kc ->

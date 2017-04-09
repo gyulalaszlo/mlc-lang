@@ -1,4 +1,4 @@
-module SEd.NodeTree exposing (Model, initialModel, Msg(..), subscriptions, update, view)
+module SEd.NodeTree exposing (Model, initialModel, Msg(..), subscriptions, update, view, setRoot)
 {-| Describe me please...
 -}
 
@@ -20,6 +20,10 @@ initialModel =
     { nodeView = NodeView.initialModel
 
     }
+
+
+setRoot : NodeView.Model -> Model -> Model
+setRoot n model = { model | nodeView = n }
 
 
 -- MSG

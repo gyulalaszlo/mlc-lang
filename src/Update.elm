@@ -2,11 +2,19 @@ module Update exposing
     ( done
 
     , Chain
-    , andThen, map
+
+    , andThen
+    , andThenIfUnhandled
+
+
+    , map
+    , mapUnhandled
 
     , mapModel, mapHandledModel
 
     , andThen2
+
+    , andThenMaybe
 
     , unhandled, error, handled
     , fromResult
@@ -107,7 +115,6 @@ concatAfter c cc =
 --        Error _-> False
 --        _ -> True
 
-
 andThen : (msg -> a -> Chain x msg b) -> Chain x msg a -> Chain x msg b
 andThen fn c = -- andThenIf notError fn c
     case c of
@@ -115,9 +122,60 @@ andThen fn c = -- andThenIf notError fn c
         Unhandled msg model -> fn msg model
         Handled msg (model, cmd) -> concatAfter c <| fn msg model
 
+
+{-| Like andThen(), but only calls fn if the update is handled
+-}
+andThenIfHandled : (msg -> a -> Chain x msg a) -> Chain x msg a -> Chain x msg a
+andThenIfHandled fn c =
+    case c of
+        Handled msg (model, cmd) ->  fn msg model
+        _ -> c
+
+
+{-| Like andThen(), but only calls fn if the update is not yet handled
+-}
+andThenIfUnhandled : (msg -> a -> Chain x msg a) -> Chain x msg a -> Chain x msg a
+andThenIfUnhandled fn c =
+    case c of
+        Unhandled msg model -> fn msg model
+        _ -> c
+
+
+{-| Run an update than may or may not handle the event
+-}
+andThenMaybe : (m -> a -> Maybe (a, Cmd m)) -> Chain x m a -> Chain x m a
+andThenMaybe fn c =
+    let
+        handler msg model =
+            fn msg model
+                |> Maybe.map (handled msg)
+                |> Maybe.withDefault (unhandled msg model)
+    in
+        andThen handler c
+
+
+
+-- MAP
+
+
+
+
+
 map : (msg -> a -> (b, Cmd msg)) -> Chain x msg a -> Chain x msg b
 map fn c =
     andThen (\msg model -> handled msg <| fn msg model) c
+
+
+
+mapUnhandled : (m -> a -> (a, Cmd m)) -> Chain x m a -> Chain x m a
+mapUnhandled fn c =
+    andThenIfUnhandled (\m a -> handled m <| fn m a ) c
+
+
+-- MISC
+
+
+
 
 
 andThen2
@@ -128,17 +186,13 @@ andThen2 fn a b =
         (Error _, _) -> a
         (_, Error _) -> b
         _ -> andThen (\ma oa -> andThen (\mb ob -> fn (ma, oa) (mb, ob)) b)  a
-        --a fn (ma,oa) (mb,ob)
---        (Handled ma (oa, ca), Unhandled mb ob) -> fn (ma,oa) (mb,ob)
-
-{-
-
-    Update.unhandled msg model
-        |> Update.andThen (updateStateMachine)
-        |> Update.finish (\err model -> {model | error = err } ! [])
 
 
--}
+
+-- PARTIAL OPERATIONS
+
+
+
 
 mapModel : (a -> b) -> Chain x msg a -> Chain x msg b
 mapModel fn c =
@@ -150,7 +204,7 @@ mapModel fn c =
 mapHandledModel : (a -> a) -> Chain x msg a -> Chain x msg a
 mapHandledModel fn c =
     case c of
---        Error err -> Error err
---        Unhandled msg model -> Unhandled msg (fn model)
         Handled msg (model, cmd) -> Handled msg (fn model, cmd)
         _ -> c
+
+

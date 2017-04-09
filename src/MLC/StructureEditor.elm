@@ -61,14 +61,6 @@ type alias UndoStackMessage = UndoStack.Msg ExpressionCursor M.Expression
 -- SUBSCRIPTIONS
 
 
-subscriptions : StateMachineModel -> Sub Msg
-subscriptions model =
-    Sub.batch
-        [ Keyboard.presses KeyPress
---        , Keyboard.downs KeyDown
---        , Keyboard.ups KeyUp
-        ]
-
 
 
 
