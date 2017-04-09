@@ -1,7 +1,7 @@
-module SEd.Keyboard.ScopeEditor exposing
+module SEd.Scopes.ScopeEditor exposing
     ( Model
-    , initialModel
-    
+    , modelFrom
+
     , Msg(..)
     
     , subscriptions
@@ -10,18 +10,18 @@ module SEd.Keyboard.ScopeEditor exposing
 
 
 
-    , SExprScopeTraits
     )
 {-| Describe me please...
 -}
 
+import SEd.Scopes exposing (ScopeTraits, BasicScope(..), leafScopeTraits)
 import Dict exposing (Dict)
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import List.Extra
-import SEd.Keyboard.KeyCommands exposing (..)
 import Task
+
 
 
 -- MODEL
@@ -48,13 +48,6 @@ modelFrom traits scope =
     , traits = traits
     }
 
-
-initialModel =
-    modelFrom
-        { kindOf = kindOf
-        , traitsFor = traitsFor
-        }
-        (EList [ EKey "if", EList [EKey "=", EKey "i", EKey "len"]])
 
 -- MSG
 
@@ -99,15 +92,8 @@ update msg model =
 
         Left -> updateStep .stepLeft model |> orNothing
         Right -> updateStep .stepRight model |> orNothing
---            updatePath
---                (\i s traits ->
---                    List.Extra.last i
---                        |> Maybe.andThen (\i -> traits.stepLeft i s)
---                        |> Maybe.map2 (\init ni -> init ++ [ni]) (List.Extra.init i)
---                ) model.path model
---                    |> orNothing
 
---        _ -> Nothing |> orNothing
+
 
 
 {-| try to step into the current context
@@ -134,27 +120,21 @@ updatePath fn path model =
     in
         List.Extra.init path
             |> Maybe.andThen (\path -> scopeAndTraitsForPath path model)
-            |> Maybe.andThen (\(current, traits) ->
-                Debug.log "NewPath:" <|
-                    fn (Debug.log "oldPath:" path) current traits
-                    )
+            |> Maybe.andThen (\(current, traits) -> fn path current traits)
             |> Maybe.map setPath
 
 
 updateStep : (ScopeTraits k s i d -> i -> s -> Maybe i) ->
     Model k s i d -> Maybe (Model k s i d, Cmd (Msg i))
 updateStep stepFn model =
-  updatePath
-        (\i s traits ->
+    let
+        newPath ps = Maybe.map (\i -> List.reverse (i::ps))
+        updateInner i s traits =
             case List.reverse i of
-                [] -> Nothing
                 h :: ps ->
-                        stepFn traits (Debug.log "head:" h) s
-                            |> Debug.log "StepFnResult:"
-                            |> Maybe.map (\ni -> List.reverse (ni :: ps) )
-
-
-        ) model.path model
+                    stepFn traits h s |> (newPath ps)
+                _ -> Nothing
+    in updatePath updateInner model.path model
 
 
 
@@ -371,190 +351,6 @@ childDataViewCss = """
 
 
 
-{-| test scope
--}
-type Scope
-    = EKey String
-    | EList (List Scope)
-
-
-type SExprScopeType
-    = SKeyScope
-    | SListScope
-
-type alias SExprData = String
-type alias SExprScopeTraits = ScopeTraits SExprScopeType Scope Int SExprData
-
-----------
-
-
-
-kindOf : Scope -> SExprScopeType
-kindOf scope =
-    case scope of
-        EList _ -> SListScope
-        EKey _ -> SKeyScope
-
-
-
-traitsFor : SExprScopeType -> SExprScopeTraits
-traitsFor s =
-    case s of
-        SKeyScope -> keyTraits
-        SListScope -> listTraits
-
-
-
-
-
-
-keyTraits : SExprScopeTraits
-keyTraits =
-    { leafScopeTraits
-    | base = StringScope
---    , childKeys = always Nothing
---    , childKindsAt = keyChildKinds
-    , childDataAt = keyChildData
---    , childScopeAt = keyChildScopeAt
---    , stepLeft = (\_ _ -> Nothing)
---    , stepRight = (\_ _ -> Nothing)
-    }
-
-
---keyChildKinds : Int -> Scope -> Maybe (List (String, SExprScopeType))
---keyChildKinds i s = Nothing
-
-{-| keyChildData
--}
-keyChildData : Int -> Scope -> Maybe SExprData
-keyChildData i s =
-    case s of
-        EKey s -> Just s
-        _ -> Nothing
-
---
---{-| key Child Scope At
----}
---keyChildScopeAt : Int -> Scope -> Maybe Scope
---keyChildScopeAt i scope =
---    Nothing
-
-
-
-
-
-
-
-
-listTraits : SExprScopeTraits
-listTraits =
-    { base = ListScope
-    , childKeys = listChildKeys
-    , childKindsAt = listChildKinds
-    , childDataAt = listChildData
-    , childScopeAt = listChildScopeFor
-
-    , stepLeft = listStepLeft
-    , stepRight = listStepRight
-    }
-
-
-listChildKinds : Int -> Scope -> Maybe (List (String, SExprScopeType))
-listChildKinds i s =
-    Just
-        [ (":", SKeyScope)
-        , ("(", SListScope)
-        ]
-
-
-{-| list Child Data
--}
-listChildData : Int -> Scope -> Maybe SExprData
-listChildData i s =
-    case s of
-        EList es ->
-            List.Extra.getAt i es
-                |> Maybe.map recursiveToData
-        _ -> Nothing
-
-{-| list Child Count
--}
-listChildKeys : Scope -> Maybe (List Int)
-listChildKeys s =
-    case s of
-        EList es -> Just <| List.range 0 (List.length es - 1)
-        _ -> Nothing
-
-
-{-| list Child Scope For
--}
-listChildScopeFor : Int -> Scope -> Maybe Scope
-listChildScopeFor i s =
-    case s of
-        EList es -> List.Extra.getAt i es
-        _ -> Nothing
-
-
-listStepLeft : Int -> Scope -> Maybe Int
-listStepLeft i s =
-    if i > 0 then Just <| i - 1  else Nothing
-
-listStepRight : Int -> Scope -> Maybe Int
-listStepRight i s =
-    case s of
-        EList es ->
-            Debug.log "listStepRight" <|
-                if (i + 1) < List.length (Debug.log "ES:" es) then Just (i + 1)  else Nothing
-        _ -> Nothing
-
-
-
-
-{-| recursive To Data
--}
-recursiveToData : Scope -> SExprData
-recursiveToData a =
-    case a of
-        EList es -> "(" ++ String.join " " (List.map recursiveToData es) ++ ")"
-        EKey s -> ":" ++ s
-
--------------------------------------
-
-
-type BasicScope
-    = StringScope
-    | IntScope
-    | RecordScope
-    | ListScope
-
-
-
-
-
-
-
-type alias ScopeTraits scopeKey scope childKey data =
-    { base: BasicScope
-    , childKeys: scope -> Maybe (List childKey)
-    , childKindsAt: childKey -> scope -> Maybe (List (String, scopeKey))
-    , childDataAt: childKey -> scope -> Maybe data
-    , childScopeAt: childKey -> scope -> Maybe scope
-
-    , stepLeft: childKey -> scope -> Maybe childKey
-    , stepRight: childKey -> scope -> Maybe childKey
-    }
-
-
-leafScopeTraits =
-    { base = StringScope
-    , childKeys = always Nothing
-    , childKindsAt = (\_ _ -> Nothing)
-    , childDataAt = (\_ _ -> Nothing)
-    , childScopeAt = (\_ _ -> Nothing)
-
-    , stepLeft = (\_ _ -> Nothing)
-    , stepRight = (\_ _ -> Nothing)
-    }
 
 
 css : String

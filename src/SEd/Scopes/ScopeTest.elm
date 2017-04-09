@@ -1,17 +1,23 @@
-module SEd.Keyboard.ScopeTest exposing (main)
+module SEd.Scopes.ScopeTest exposing (main)
 {-| Describe me please...
 -}
-import SEd.Keyboard.ScopeEditor exposing (Model, Msg(..), initialModel, view, update, subscriptions, css)
+import SEd.Scopes.ScopeEditor exposing (Model, Msg(..), modelFrom, view, update, subscriptions, css)
 import Html exposing (Html)
 import Html.Attributes
 import Task
+import SEd.Scopes.SExprScopes exposing (kindOf, traitsFor, Scope(..))
 
 
+initialModel =
+    modelFrom
+        { kindOf = kindOf
+        , traitsFor = traitsFor
+        }
+        (EList [ EKey "if", EList [EKey "=", EKey "i", EKey "len"]])
 
---init : ( Model, Cmd Msg )
+
 init =
     ( initialModel, Cmd.none )
-    -- ( initialModel, Task.perform INIT_MSG (Task.succeed MSG_DATA) )
 
 
 withCss : String -> (model -> Html msg) -> model -> Html msg
@@ -25,7 +31,6 @@ withCss css view model =
         ]
 
 
---main : Program Never Model Msg
 main =
     Html.program
         { init = init
