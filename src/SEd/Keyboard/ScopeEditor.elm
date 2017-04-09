@@ -7,6 +7,10 @@ module SEd.Keyboard.ScopeEditor exposing
     , subscriptions
     , update
     , view, css
+
+
+
+    , SExprScopeTraits
     )
 {-| Describe me please...
 -}
@@ -17,36 +21,58 @@ import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import List.Extra
 import SEd.Keyboard.KeyCommands exposing (..)
+import Task
+
 
 -- MODEL
 
 
-type alias Model =
-    { data: Scope
-    , path: List Int
+{-| Traits
+-}
+type alias ScopeLikeTraits kind scope childKey data =
+    { kindOf: scope -> kind
+    , traitsFor: kind -> ScopeTraits kind scope childKey data
+    }
+
+type alias Model kind scope childKey data  =
+    { data: scope
+    , path: List childKey --(kind, childKey)
+    , traits: ScopeLikeTraits kind scope childKey data
     }
 
 
-initialModel : Model
-initialModel =
-    { data = EList [ EKey "if", EList [EKey "=", EKey "i", EKey "len"]]
+modelFrom : ScopeLikeTraits k s i d -> s -> Model k s i d
+modelFrom traits scope =
+    { data = scope
     , path = []
+    , traits = traits
     }
 
+
+initialModel =
+    modelFrom
+        { kindOf = kindOf
+        , traitsFor = traitsFor
+        }
+        (EList [ EKey "if", EList [EKey "=", EKey "i", EKey "len"]])
 
 -- MSG
 
 
-type Msg
-    = AddPath Int
+type Msg key
+    = AddPath key
+    | SetPath (List key)
     | Up
+    | Down
+    | Left
+    | Right
 
 
 
 -- SUBSCRIPTIONS
 
 
-subscriptions : Model -> Sub Msg
+subscriptions : Model k s i d  -> Sub (Msg i)
 subscriptions model =
     Sub.none
 
@@ -55,33 +81,114 @@ subscriptions model =
 -- UPDATE
 
 
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg i -> Model k s i d -> (Model k s i d, Cmd (Msg i))
 update msg model =
-    case msg of
+    let orNothing = Maybe.withDefault (model, Cmd.none)
+    in case msg of
         AddPath i ->
             {model | path = model.path ++ [i] } ! []
 
+        SetPath is -> {model | path = is } ! []
         Up ->
              List.Extra.init model.path
                 |> Maybe.map (\p -> { model | path = p } ! [])
-                |> Maybe.withDefault (model, Cmd.none)
+                |> orNothing
+
+        Down ->
+            stepDown model |> orNothing
+
+        Left -> updateStep .stepLeft model |> orNothing
+        Right -> updateStep .stepRight model |> orNothing
+--            updatePath
+--                (\i s traits ->
+--                    List.Extra.last i
+--                        |> Maybe.andThen (\i -> traits.stepLeft i s)
+--                        |> Maybe.map2 (\init ni -> init ++ [ni]) (List.Extra.init i)
+--                ) model.path model
+--                    |> orNothing
+
+--        _ -> Nothing |> orNothing
+
+
+{-| try to step into the current context
+-}
+stepDown : Model k s i d -> Maybe (Model k s i d, Cmd (Msg i))
+stepDown model =
+    scopeAndTraitsForPath model.path model
+        |> Maybe.andThen (\(current, traits) -> traits.childKeys current)
+        |> Maybe.andThen List.head
+        |> Maybe.map (\head -> (model, Task.perform AddPath (Task.succeed head)))
+
+
+
+
+{-| try to step into the current context
+-}
+updatePath
+    : (List i -> s -> ScopeTraits k s i d -> Maybe (List i))
+    -> List i -> Model k s i d -> Maybe (Model k s i d, Cmd (Msg i))
+updatePath fn path model =
+    let
+        setPath : List i -> (Model k s i d, Cmd (Msg i))
+        setPath newPath = (model, Task.perform SetPath (Task.succeed newPath))
+    in
+        List.Extra.init path
+            |> Maybe.andThen (\path -> scopeAndTraitsForPath path model)
+            |> Maybe.andThen (\(current, traits) ->
+                Debug.log "NewPath:" <|
+                    fn (Debug.log "oldPath:" path) current traits
+                    )
+            |> Maybe.map setPath
+
+
+updateStep : (ScopeTraits k s i d -> i -> s -> Maybe i) ->
+    Model k s i d -> Maybe (Model k s i d, Cmd (Msg i))
+updateStep stepFn model =
+  updatePath
+        (\i s traits ->
+            case List.reverse i of
+                [] -> Nothing
+                h :: ps ->
+                        stepFn traits (Debug.log "head:" h) s
+                            |> Debug.log "StepFnResult:"
+                            |> Maybe.map (\ni -> List.reverse (ni :: ps) )
+
+
+        ) model.path model
 
 
 
 
 
+{-| get the current scope at the models path
+-}
+currentScope : Model k s i d -> Maybe s
+currentScope model =
+    sExprAt model.traits model.path model.data
 
-sExprAt : List Int -> Scope -> Maybe Scope
-sExprAt path scope =
+
+
+scopeAndTraitsForPath : List i -> Model k s i d -> Maybe (s,ScopeTraits k s i d)
+scopeAndTraitsForPath path model =
+    let target = sExprAt model.traits path model.data
+    in target
+        |> Maybe.map model.traits.kindOf
+        |> Maybe.map model.traits.traitsFor
+        |> Maybe.map2 (,) target
+
+
+
+sExprAt : ScopeLikeTraits k s i d -> List i -> s -> Maybe s
+sExprAt scopeTraits path scope =
     case path of
         [] -> Just scope
         i :: path ->
             let
-                kind = kindOf scope
-                traits = traitsFor kind
+                kind = scopeTraits.kindOf scope
+                traits = scopeTraits.traitsFor kind
             in
                 traits.childScopeAt i scope
-                    |> Maybe.andThen (sExprAt path)
+                    |> Maybe.andThen (sExprAt scopeTraits path)
 
 
 -- VIEW: view
@@ -90,16 +197,22 @@ sExprAt path scope =
 
 {-| view
 -}
-view : Model -> Html Msg
+view : Model k s i d -> Html (Msg i)
 view model =
     div [ class "scope-editor-view" ]
         [ text <| toString model
         , Html.hr [][]
         , infoRowBase "path" <| htmlList (infoRow "step" << toString) model.path
+
         , Html.button [ onClick Up ] [text "Up"]
+        , Html.button [ onClick Down ] [text "Down"]
+
+        , Html.button [ onClick Left ] [text "<- Left"]
+        , Html.button [ onClick Right ] [text "Right -> "]
+
         , Html.hr [][]
-        , sExprAt model.path model.data
-            |> Maybe.map sExpressionView
+        , sExprAt model.traits model.path model.data
+            |> Maybe.map (sExpressionView model.traits)
             |> Maybe.withDefault (text "Cannot find SExpr at path")
 
         ]
@@ -144,13 +257,12 @@ htmlList fn es =
 
 {-| s expression view
 -}
-sExpressionView : Scope -> Html Msg
-sExpressionView scope =
+sExpressionView : ScopeLikeTraits k s i d -> s -> Html (Msg i)
+sExpressionView scopeTraits scope =
     let
-        kind = kindOf scope
-        traits = traitsFor kind
-        childRange = traits.childCount scope
-             |> Maybe.map (\len -> List.range 0 (len - 1))
+        kind = scopeTraits.kindOf scope
+        traits = scopeTraits.traitsFor kind
+        childRange = traits.childKeys scope
      in
          div [ class "s-expr-view" ]
              [ infoRow "kind" <| toString kind
@@ -189,12 +301,14 @@ sExpressionViewCss = """
 
 {-| child kind and data view
 -}
-childKindAndDataView : SExprScopeTraits -> Int -> Scope -> Html Msg
+childKindAndDataView : ScopeTraits k s i d -> i -> s -> Html (Msg i)
 childKindAndDataView traits i scope =
     div [ class "child-kind-and-data-view" ]
         [ Html.button [ class "idx", onClick (AddPath i)] [ text <| toString i ]
 
-        , childDataView <| traits.childDataAt i scope
+        ,  traits.childDataAt i scope
+            |> Maybe.map childDataView
+            |> Maybe.withDefault (text "nada")
 
         , traits.childKindsAt i scope
             |> Maybe.map (htmlList (\(n,k) -> childKindView n k scope))
@@ -219,7 +333,7 @@ childKindAndDataViewCss = """
 
 {-| child kind views
 -}
-childKindView : String -> SExprScopeType -> Scope -> Html Msg
+childKindView : String -> k -> s -> Html (Msg i)
 childKindView shortName scopeType scope =
     Html.li [ class "child-kind-views" ]
         [ infoRow "kind" <| toString scopeType
@@ -242,13 +356,10 @@ childKindViewsCss = """
 
 {-| child data view
 -}
-childDataView : Maybe SExprData -> Html Msg
+childDataView : d -> Html (Msg i)
 childDataView data =
     div [ class "child-data-view" ]
-        [ infoRow "data" <|
-            case data of
-                Just data -> data
-                Nothing -> "~~~ NOTHING ~~~"
+        [ infoRow "data" <| toString data
         ]
 
 {-| CSS parts for childDataView
@@ -272,7 +383,7 @@ type SExprScopeType
     | SListScope
 
 type alias SExprData = String
-type alias SExprScopeTraits = ScopeTraits SExprScopeType Scope SExprData
+type alias SExprScopeTraits = ScopeTraits SExprScopeType Scope Int SExprData
 
 ----------
 
@@ -286,7 +397,7 @@ kindOf scope =
 
 
 
-traitsFor : SExprScopeType -> ScopeTraits SExprScopeType Scope String
+traitsFor : SExprScopeType -> SExprScopeTraits
 traitsFor s =
     case s of
         SKeyScope -> keyTraits
@@ -297,18 +408,21 @@ traitsFor s =
 
 
 
-keyTraits : ScopeTraits SExprScopeType Scope String
+keyTraits : SExprScopeTraits
 keyTraits =
-    { base = StringScope
-    , childCount = always Nothing
-    , childKindsAt = keyChildKinds
+    { leafScopeTraits
+    | base = StringScope
+--    , childKeys = always Nothing
+--    , childKindsAt = keyChildKinds
     , childDataAt = keyChildData
-    , childScopeAt = keyChildScopeAt
+--    , childScopeAt = keyChildScopeAt
+--    , stepLeft = (\_ _ -> Nothing)
+--    , stepRight = (\_ _ -> Nothing)
     }
 
 
-keyChildKinds : Int -> Scope -> Maybe (List (String, SExprScopeType))
-keyChildKinds i s = Nothing
+--keyChildKinds : Int -> Scope -> Maybe (List (String, SExprScopeType))
+--keyChildKinds i s = Nothing
 
 {-| keyChildData
 -}
@@ -318,27 +432,30 @@ keyChildData i s =
         EKey s -> Just s
         _ -> Nothing
 
-
-{-| key Child Scope At
--}
-keyChildScopeAt : Int -> Scope -> Maybe Scope
-keyChildScopeAt i scope =
-    Nothing
-
-
+--
+--{-| key Child Scope At
+---}
+--keyChildScopeAt : Int -> Scope -> Maybe Scope
+--keyChildScopeAt i scope =
+--    Nothing
 
 
 
 
 
 
-listTraits : ScopeTraits SExprScopeType Scope String
+
+
+listTraits : SExprScopeTraits
 listTraits =
     { base = ListScope
-    , childCount = listChildCount
+    , childKeys = listChildKeys
     , childKindsAt = listChildKinds
     , childDataAt = listChildData
     , childScopeAt = listChildScopeFor
+
+    , stepLeft = listStepLeft
+    , stepRight = listStepRight
     }
 
 
@@ -362,10 +479,10 @@ listChildData i s =
 
 {-| list Child Count
 -}
-listChildCount : Scope -> Maybe Int
-listChildCount s =
+listChildKeys : Scope -> Maybe (List Int)
+listChildKeys s =
     case s of
-        EList es -> Just <| List.length es
+        EList es -> Just <| List.range 0 (List.length es - 1)
         _ -> Nothing
 
 
@@ -378,7 +495,17 @@ listChildScopeFor i s =
         _ -> Nothing
 
 
+listStepLeft : Int -> Scope -> Maybe Int
+listStepLeft i s =
+    if i > 0 then Just <| i - 1  else Nothing
 
+listStepRight : Int -> Scope -> Maybe Int
+listStepRight i s =
+    case s of
+        EList es ->
+            Debug.log "listStepRight" <|
+                if (i + 1) < List.length (Debug.log "ES:" es) then Just (i + 1)  else Nothing
+        _ -> Nothing
 
 
 
@@ -406,23 +533,28 @@ type BasicScope
 
 
 
-type alias ChildKinds msg scope =
-    Int -> scope -> Maybe (List (String, msg))
-
-type alias ChildData scope data =
-    Int -> scope -> Maybe data
-
-
-type alias ScopeTraits msg scope data =
+type alias ScopeTraits scopeKey scope childKey data =
     { base: BasicScope
-    , childCount: (scope -> Maybe Int)
-    , childKindsAt: ChildKinds msg scope
-    , childDataAt: ChildData scope data
-    , childScopeAt: Int -> scope -> Maybe Scope
+    , childKeys: scope -> Maybe (List childKey)
+    , childKindsAt: childKey -> scope -> Maybe (List (String, scopeKey))
+    , childDataAt: childKey -> scope -> Maybe data
+    , childScopeAt: childKey -> scope -> Maybe scope
+
+    , stepLeft: childKey -> scope -> Maybe childKey
+    , stepRight: childKey -> scope -> Maybe childKey
     }
 
 
+leafScopeTraits =
+    { base = StringScope
+    , childKeys = always Nothing
+    , childKindsAt = (\_ _ -> Nothing)
+    , childDataAt = (\_ _ -> Nothing)
+    , childScopeAt = (\_ _ -> Nothing)
 
+    , stepLeft = (\_ _ -> Nothing)
+    , stepRight = (\_ _ -> Nothing)
+    }
 
 
 css : String

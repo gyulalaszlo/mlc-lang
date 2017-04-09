@@ -7,7 +7,8 @@ import Html.Attributes
 import Task
 
 
-init : ( Model, Cmd Msg )
+
+--init : ( Model, Cmd Msg )
 init =
     ( initialModel, Cmd.none )
     -- ( initialModel, Task.perform INIT_MSG (Task.succeed MSG_DATA) )
@@ -24,7 +25,7 @@ withCss css view model =
         ]
 
 
-main : Program Never Model Msg
+--main : Program Never Model Msg
 main =
     Html.program
         { init = init
