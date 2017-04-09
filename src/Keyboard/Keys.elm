@@ -16,9 +16,9 @@ import Update
 {-| The originating event type
 -}
 type KeyEventType
-    = KDown
-    | KUp
-    | KPress
+    = KDown KeyCode
+    | KUp KeyCode
+    | KPress KeyCode
 
 {-| Instead of having a separate check for each modifier
     (which would result in awkward pattern-matching statements
@@ -139,27 +139,21 @@ type Key
     | DeleteKey DeleteKeyType
 
     | UnknownKey KeyCode
+    | OtherKeyPressed Char
 
 
-
+{-| The main event type
+-}
 type alias KeyEvent =
     { eventType: KeyEventType
     , modifiers: ModifiersDown
     , key: Key
-    , keyCode: KeyCode
     }
 
 
 
+-- KEYBOARD "SERVICE"
 
---type KeyValidationResult
---    = Ignore
---    | Handle
---    |
---
---type KeyboardBehaviour
---    { isValid: (KeyEvent)->
---    }
 
 
 type alias Model =
@@ -190,16 +184,16 @@ initialModel =
 
 
 type Msg
-    = EKey KeyEventType KeyCode
-    | EKeyPress KeyCode
+    = EKey KeyEventType
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.batch
-        [ Keyboard.ups (EKey KUp)
-        , Keyboard.downs (EKey KDown)
-        , Keyboard.presses (EKey KPress)
+    let mapTo evt msg  = evt (\ch -> EKey (msg ch))
+    in Sub.batch
+        [ mapTo Keyboard.ups KUp
+        , mapTo Keyboard.downs KDown
+        , mapTo Keyboard.presses KPress
         ]
 
 
@@ -221,7 +215,7 @@ update msg model =
 addToUnhandledEvents : Msg -> Model -> (Model, Cmd Msg)
 addToUnhandledEvents msg model =
     case msg of
-        EKey KPress _ -> ({ model | unhandled = msg :: model.unhandled }, Cmd.none)
+        EKey (KPress _) -> ({ model | unhandled = msg :: model.unhandled }, Cmd.none)
         _ ->  noCommand model
 
 
@@ -236,8 +230,8 @@ onKeysUpDownEvents msg model =
                 |> Maybe.map noCommand
 
     in case msg of
-        EKey KUp kc -> toEvent KUp kc
-        EKey KDown kc -> toEvent KDown kc
+        EKey (KUp kc) -> toEvent (KUp kc) kc
+        EKey (KDown kc) -> toEvent (KDown kc) kc
         _ -> Nothing
 
 
@@ -245,15 +239,11 @@ onKeysUpDownEvents msg model =
 onKeyPressEvents : Msg -> Model -> Maybe (Model, Cmd Msg)
 onKeyPressEvents msg model =
     case msg of
-        EKey KPress kc ->
-            toKeyEvent keyPressToKey KPress (modifiers model) kc
+        EKey (KPress kc) ->
+            toKeyEvent keyPressToKey (KPress kc) (modifiers model) kc
                 |> Maybe.map (\ke -> addToHistory ke model)
                 |> Maybe.map noCommand
 
-
---            toKeyEvent KPress (modifiers model) kc
---                |> Maybe.map (\ke -> addToHistory ke model)
---                |> Maybe.map noCommand
         _ -> Nothing
 
 
@@ -283,22 +273,10 @@ toKeyEvent fn kind mods kc =
             { eventType = kind
             , modifiers = mods
             , key = UnknownKey kc
-            , keyCode = kc
+--            , keyCode = kc
             }
     in
         fn kc |> Maybe.map (\key -> { base | key = key })
-
-
--- VIEW
-
-
-
-
-
-
-
-
--- UPDATE
 
 
 
@@ -320,10 +298,10 @@ updateModifiers msg model =
 
     in case msg of
 
-        EKey KDown kc ->
+        EKey (KDown kc) ->
             handleModifierMsg kc True
 
-        EKey KUp kc ->
+        EKey (KUp kc) ->
             handleModifierMsg kc False
         _ ->
             Nothing
@@ -365,38 +343,62 @@ modifierFromTree tree {isAltDown,isCtrlDown,isMetaDown,isShiftDown} =
 
 
 
-
-
 -- KEY CODES TO KEYS
+
+
 
 
 keyPressToKey : KeyCode -> Maybe Key
 keyPressToKey kc =
-    -- lowercase char
-    if (kc >= 97 && kc <= 122) || (kc >=  65 && kc <= 90)
-        then Just <| LetterKey <| Char.fromCode kc
-        else Nothing
+    let ch = Char.fromCode kc
+        bracket t k = Just <| Bracket  t k
+    in
+        if ch == ' ' then Just Space
+        -- lowercase char
+        else if ch >= 'a' && ch <= 'z' then Just <| LetterKey ch
+        else if ch >= 'A' && ch <= 'Z' then Just <| LetterKey ch
 
---    List.foldl (\fn m -> m |> orElse (fn kc)) Nothing
---        [toBasics, toFunctionKey]
---
---orElse : Maybe c -> Maybe c -> Maybe c
---orElse a fn =
---    case a of
---        Just _ -> a
---        Nothing -> fn
+        else if ch >= '0' && ch <= '9'
+            then Just <|Digit <| NumberKey <| charToInt ch
+
+        else
+            bracketsToKey ch
+                |> Maybe.withDefault (OtherKeyPressed ch)
+                |> Just
+
+
+{-| is the key a bracket?
+-}
+bracketsToKey : Char -> Maybe Key
+bracketsToKey ch =
+
+   let bracket t k = Just <| Bracket  t k
+   in case ch of
+                '(' -> bracket Parenthesis OpenBracket
+                ')' -> bracket Parenthesis CloseBracket
+                '[' -> bracket SquareBracket CloseBracket
+                ']' -> bracket SquareBracket OpenBracket
+                '<' -> bracket AngleBracket OpenBracket
+                '>' -> bracket AngleBracket OpenBracket
+                '{' -> bracket Braces OpenBracket
+                '}' -> bracket Braces OpenBracket
+
+                _ -> Nothing
+
+charToInt : Char -> Int
+charToInt c =
+    String.fromChar c
+        |> String.toInt
+        |> Result.withDefault 0
+
+
+
 
 keyDownUpCodeToKey : KeyCode -> Maybe Key
-keyDownUpCodeToKey kc = toBasics kc
-
-
-toBasics : KeyCode -> Maybe Key
-toBasics kc =
+keyDownUpCodeToKey kc =
     case kc of
         9 -> Just Tab
         27 -> Just Escape
-        13 -> Just Enter
-        32 -> Just Space
 
         33 -> Just <| PageNav PageUp
         34 -> Just <| PageNav PageDown
@@ -424,38 +426,84 @@ toBasics kc =
         122 -> functionKey 11
         123 -> functionKey 12
 
---        190 -> Just <| Punctuation '.'
---        188 -> Just <| Punctuation ','
---        186 -> Just <| Punctuation ';'
 
         _ -> Nothing
 
 
+functionKey : Int -> Maybe Key
 functionKey k = Just <| FunctionKey k
 
 
---toFunctionKey : KeyCode -> Maybe Key
---toFunctionKey kc =
---    if kc < 112 || kc > 123
---        then Nothing
---        else Just <| FunctionKey <| kc - 112
 
 
-toDigit : KeyCode -> Maybe Key
-toDigit kc =
-    if kc < 48 || kc > 57
-        then Nothing
-        else Just <| Digit <| NumberKey <|  kc - 48
+{-| Converts a key to a string label
+-}
+keyToString : Key -> String
+keyToString k =
+    case k of
+        FunctionKey f -> "F" ++ toString f
+        Digit (NumberKey k) ->  toString k
+        Digit (NumPadKey k) ->  "NumPad " ++ toString k
+        Space -> "SPACE"
+        Enter -> "ENTER"
+        DeleteKey Delete -> "DEL"
+        DeleteKey Backspace -> "BACKSPACE"
 
-toLetter : KeyCode -> Maybe Key
-toLetter kc =
-    if kc < 65 || kc > 90
-        then Nothing
-        else Just <| LetterKey <| Char.fromCode kc
+        LetterKey f ->  String.fromChar f
+        Arrow a  -> arrowKeyToString a
 
---
---    -- parenthesis and other paired keys
---    | Bracket BracketType BracketRole
---
---    | Punctuation Char
---
+        OtherKeyPressed ch -> String.fromChar ch
+
+        _ ->  toString k
+
+
+{-| converts an  arrow key to a unicode icon
+-}
+arrowKeyToString : ArrowKeyType -> String
+arrowKeyToString k =
+    case k of
+        ArrowLeft -> "←"
+        ArrowDown -> "↓"
+        ArrowRight -> "→"
+        ArrowUp -> "↑"
+
+
+
+
+modifierKeysToString : ModifiersDown -> List String
+modifierKeysToString m =
+    case m of
+     NoModifiers -> []
+
+     Alt -> [altLabel]
+     Ctrl ->  [ctrlLabel]
+     Meta ->  [metaLabel]
+     Shift ->  [shiftLabel]
+
+    -- Doppelgangers :)
+
+     AltCtrl ->  [altLabel, ctrlLabel]
+     AltMeta ->  [altLabel, metaLabel]
+     AltShift ->  [altLabel, shiftLabel]
+
+     CtrlMeta ->  [ctrlLabel, metaLabel]
+     CtrlShift ->  [ctrlLabel, shiftLabel]
+
+     MetaShift ->  [metaLabel, shiftLabel]
+
+    -- Trippelgangers :)
+
+     AltCtrlMeta ->  [altLabel, ctrlLabel, metaLabel]
+     AltCtrlShift ->  [altLabel, ctrlLabel, shiftLabel]
+     AltMetaShift ->  [altLabel, metaLabel, shiftLabel]
+     CtrlMetaShift ->  [ctrlLabel, metaLabel, shiftLabel]
+
+    -- Quads only
+
+     AltCtrlMetaShift ->  [altLabel, ctrlLabel, metaLabel, shiftLabel]
+
+
+shiftLabel = "⇧"
+altLabel =  "⌥"
+metaLabel = "⌘"
+ctrlLabel = "^"

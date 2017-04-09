@@ -1,9 +1,7 @@
-module SEd.Keyboard.KeysTest exposing (main)
+module SEd.Keyboard.ScopeTest exposing (main)
 {-| Describe me please...
 -}
---import Keyboard.Keys exposing (..)
---import SEd.Keyboard.KeyCommands as KeyCommands exposing (KeyCommand)
-import SEd.Keyboard.KeyboardView exposing (Model, Msg(..), initialModel, update, subscriptions, view, css)
+import SEd.Keyboard.ScopeEditor exposing (Model, Msg(..), initialModel, view, update, subscriptions, css)
 import Html exposing (Html)
 import Html.Attributes
 import Task
@@ -34,9 +32,3 @@ main =
         , update = update
         , subscriptions = subscriptions
         }
-
-
-
-
-
-

@@ -14,7 +14,7 @@ module SEd.Keyboard.KeyboardView exposing
 
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (class)
-import Keyboard.Keys as Keyboard exposing (ArrowKeyType, Key(..))
+import Keyboard.Keys as Keyboard exposing (ArrowKeyType, Key(..), ModifiersDown(..))
 
 
 -- MODEL
@@ -112,16 +112,16 @@ modifierKey label isDown =
 
 
 keyEventView : Keyboard.KeyEvent -> Html Msg
-keyEventView { eventType , modifiers , key , keyCode } =
+keyEventView { eventType , modifiers , key } =
     Html.span
         [ class "key-event-view"
         , class <| case eventType of
-            Keyboard.KUp -> "key-event-key-up"
-            Keyboard.KDown -> "key-event-key-down"
-            Keyboard.KPress -> "key-event-key-press"
+            Keyboard.KUp _ -> "key-event-key-up"
+            Keyboard.KDown _ -> "key-event-key-down"
+            Keyboard.KPress _ -> "key-event-key-press"
         ]
         [ modifiersDown modifiers
-        , keyIcon <| keyLabel key
+        , keyIcon <| Keyboard.keyToString key
         ]
 
 keyIcons : List String -> Html msg
@@ -132,64 +132,19 @@ keyIcon : String -> Html msg
 keyIcon label = Html.span [ class "key-view" ] [ text label ]
 
 
+
+-- MODIFIER KEYS
+
 modifiersDown : Keyboard.ModifiersDown -> Html msg
-modifiersDown m =
-    case m of
-     Keyboard.NoModifiers -> keyIcons []
-
-     Keyboard.Alt -> keyIcons [altLabel]
-     Keyboard.Ctrl -> keyIcons [ctrlLabel]
-     Keyboard.Meta -> keyIcons [metaLabel]
-     Keyboard.Shift -> keyIcons [shiftLabel]
-
-    -- Doppelgangers :)
-
-     Keyboard.AltCtrl -> keyIcons [altLabel, ctrlLabel]
-     Keyboard.AltMeta -> keyIcons [altLabel, metaLabel]
-     Keyboard.AltShift -> keyIcons [altLabel, shiftLabel]
-
-     Keyboard.CtrlMeta -> keyIcons [ctrlLabel, metaLabel]
-     Keyboard.CtrlShift -> keyIcons [ctrlLabel, shiftLabel]
-
-     Keyboard.MetaShift -> keyIcons [metaLabel, shiftLabel]
-
-    -- Trippelgangers :)
-
-     Keyboard.AltCtrlMeta -> keyIcons [altLabel, ctrlLabel, metaLabel]
-     Keyboard.AltCtrlShift -> keyIcons [altLabel, ctrlLabel, shiftLabel]
-     Keyboard.AltMetaShift -> keyIcons [altLabel, metaLabel, shiftLabel]
-     Keyboard.CtrlMetaShift -> keyIcons [ctrlLabel, metaLabel, shiftLabel]
-
-    -- Quads only
-
-     Keyboard.AltCtrlMetaShift -> keyIcons [altLabel, ctrlLabel, metaLabel, shiftLabel]
+modifiersDown m = keyIcons <| Keyboard.modifierKeysToString m
 
 
 
 
-keyLabel : Key -> String
-keyLabel k =
-    case k of
-        FunctionKey f -> "F" ++ toString f
-        Digit (Keyboard.NumberKey k) ->  toString k
-        Digit (Keyboard.NumPadKey k) ->  "NumPad " ++ toString k
-
-        LetterKey f ->  String.fromChar f
-        Arrow a  -> arrowKeyToString a
-
-        _ ->  toString k
 
 
-{-| converts an  arrow key to a unicode icon
--}
-arrowKeyToString : ArrowKeyType -> String
-arrowKeyToString k =
-    case k of
-        Keyboard.ArrowLeft -> "←"
-        Keyboard.ArrowDown -> "↓"
-        Keyboard.ArrowRight -> "→"
-        Keyboard.ArrowUp -> "↑"
 
+-- CSS
 
 
 css : String
@@ -197,16 +152,12 @@ css = """
 
 .modifier-keys-down { display:inline-block; }
 
-.key-view { display:inline-block; border:0.1em solid; border-bottom:0.3em solid; border-radius: 0.3em; padding: 0.1em;  }
+.key-view {  }
 
 
-.key-event-view { display: block; }
+.key-event-view { display:inline-block; border:0.1em solid; border-bottom:0.3em solid; border-radius: 0.3em; padding: 0.1em; }
 .key-event-key-down { }
 .key-event-key-up { color: #ccc; }
 """
 
 
-shiftLabel = "⇧"
-altLabel =  "⌥"
-metaLabel = "⌘"
-ctrlLabel = "^"
