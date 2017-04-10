@@ -73,6 +73,16 @@ sExprAt scopeTraits path scope =
 
 
 
+{-| Gets the scope traits for a scope
+
+    traits.traitsFor <| traits.kindOf scope
+
+-}
+scopeTraitsFor : ScopeLikeTraits k s i d -> s -> ScopeTraits k s i d
+scopeTraitsFor traits scope =
+    traits.traitsFor <| traits.kindOf scope
+
+
 -- SUBSCRIPTIONS
 
 

@@ -42,6 +42,8 @@ toolbarView model =
             , Html.button [ onClick Down ] [ text "Down" ]
             , Html.button [ onClick Left ] [ text "<- Left" ]
             , Html.button [ onClick Right ] [ text "Right -> " ]
+            , text " .. "
+            , Html.button [ onClick OpRemove ] [ text "REMOVE !=" ]
             , scopeAndTraitsForPath model.path model
                 |> Maybe.map
                     (\( c, t ) ->

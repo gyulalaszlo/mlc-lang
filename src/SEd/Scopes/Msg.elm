@@ -16,4 +16,6 @@ type Msg key
     | Left
     | Right
 
+    | OpRemove
+
 

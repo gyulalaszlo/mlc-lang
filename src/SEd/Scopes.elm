@@ -37,6 +37,14 @@ type alias PossibleScopes scopeKey
     = List scopeKey
 
 
+{-| Performs a basic operation on a child and returns Just the updated version of
+scope if the operation succeeded and Nothing otherwise.
+-}
+type alias ChildOperation scope childKey = BasicOperation -> childKey -> scope -> Maybe scope
+
+
+{-| Groups behaviours for a scope
+-}
 type alias ScopeTraits scopeKey scope childKey data =
     { base: BasicScope
     , toData: (scope -> Maybe data)
@@ -50,6 +58,8 @@ type alias ScopeTraits scopeKey scope childKey data =
 
     , stepLeft: childKey -> scope -> Maybe childKey
     , stepRight: childKey -> scope -> Maybe childKey
+
+    , operateOnChildAt: BasicOperation -> Maybe scope -> childKey -> scope -> Maybe (Maybe childKey, scope)
     }
 
 
@@ -67,5 +77,7 @@ leafScopeTraits =
 
     , stepLeft = nada
     , stepRight = nada
+
+    , operateOnChildAt = (\_ _ _ _ -> Nothing)
     }
 

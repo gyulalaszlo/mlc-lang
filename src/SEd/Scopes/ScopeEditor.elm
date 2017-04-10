@@ -17,8 +17,8 @@ import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import List.Extra
 import Task
-import SEd.Scopes exposing (ScopeTraits)
-import SEd.Scopes.Model as Model exposing (sExprAt, scopeAndTraitsForPath)
+import SEd.Scopes exposing (BasicOperation(RemoveOperation, ReplaceOperation), ScopeTraits)
+import SEd.Scopes.Model as Model exposing (sExprAt, scopeAndTraitsForPath, scopeTraitsFor)
 import SEd.Scopes.Msg exposing (Msg(..))
 import SEd.Scopes.Views as Views
 
@@ -51,8 +51,6 @@ subscriptions =
 
 
 
---subscriptions model =
---    Sub.none
 -- UPDATE
 
 
@@ -61,6 +59,8 @@ update msg model =
     let
         orNothing =
             Maybe.withDefault ( model, Cmd.none )
+        updateData newData =
+            ({ model | data = newData }, Cmd.none)
     in
         case msg of
             AddPath i ->
@@ -83,6 +83,13 @@ update msg model =
             Right ->
                 updateStep .stepRight model |> orNothing
 
+            OpRemove ->
+                updateWithOp RemoveOperation Nothing model
+                    |> Maybe.map (\m -> (m, Cmd.none))
+--                    |> Maybe.map updateData
+                    |> orNothing
+
+
 
 {-| try to step into the current context
 -}
@@ -92,6 +99,49 @@ stepDown model =
         |> Maybe.andThen (\( current, traits ) -> traits.childKeys current)
         |> Maybe.andThen List.head
         |> Maybe.map (\head -> ( model, Task.perform AddPath (Task.succeed head) ))
+
+
+
+updateWithOp : BasicOperation -> Maybe s -> Model k s i d  -> Maybe (Model k s i d)
+updateWithOp op newScope model =
+    updateWithOpHelper op newScope model model.path model.data
+        |> Maybe.map (\(newPath, newData) -> { model | data = newData, path = newPath})
+
+
+
+{-| update With Op
+-}
+updateWithOpHelper : BasicOperation -> Maybe s -> Model k s i d -> List i -> s -> Maybe (List i, s)
+updateWithOpHelper op newScope model path current =
+
+    let traits = scopeTraitsFor model.traits current
+        recurse pathRest childScope = updateWithOpHelper op newScope model pathRest childScope
+        pathOrEmpty p = Maybe.map (\l -> [l]) p |> Maybe.withDefault []
+
+    in case path of
+        -- cannot operate on root
+        [] -> Nothing
+        -- single key means this is our target
+        [pathHead] ->
+            traits.operateOnChildAt op newScope pathHead current
+                |> Maybe.map (\(newC, newS) -> (pathOrEmpty newC , newS) )
+        -- go deeper and update
+        pathHead :: pathRest ->
+            -- find the child if there is any
+            traits.childScopeAt pathHead current
+                -- recurse with the op on the child if there is any
+                |> Maybe.andThen (\childScope -> recurse pathRest childScope)
+                -- then replace the current scopes version with the updated one
+                |> Maybe.andThen (\(newPath, child) ->
+                     traits.operateOnChildAt ReplaceOperation (Just  child) pathHead current
+                        |> Maybe.map (\(k,s) -> (pathOrEmpty k ++ newPath, s))
+                    )
+
+
+
+
+
+
 
 
 {-| try to step into the current context
