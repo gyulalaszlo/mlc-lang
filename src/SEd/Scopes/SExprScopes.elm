@@ -46,6 +46,8 @@ keyTraits : SExprScopeTraits
 keyTraits =
     { leafScopeTraits
     | base = StringScope
+    , operationSupports = (\_ _ -> Just [SKeyScope])
+    , toData = Just << recursiveToData
     , childDataAt = keyChildData
     }
 
@@ -70,6 +72,9 @@ keyChildData i s =
 listTraits : SExprScopeTraits
 listTraits =
     { base = ListScope
+    , toData = Just << recursiveToData
+    , operationSupports = listChildOperationSupports
+
     , childKeys = listChildKeys
     , childKindsAt = listChildKinds
     , childDataAt = listChildData
@@ -80,13 +85,15 @@ listTraits =
     }
 
 
-listChildKinds : Int -> Scope -> Maybe (List (String, SExprScopeType))
+listChildKinds : Int -> Scope -> Maybe (List SExprScopeType)
 listChildKinds i s =
-    Just
-        [ (":", SKeyScope)
-        , ("(", SListScope)
-        ]
+    listChildKindsData
 
+listChildKindsData =
+    Just
+        [ SKeyScope
+        , SListScope
+        ]
 
 {-| list Child Data
 -}
@@ -130,7 +137,12 @@ listStepRight i s =
         _ -> Nothing
 
 
-
+listChildOperationSupports : BasicOperation -> Scope -> Maybe (List SExprScopeType)
+listChildOperationSupports op s =
+    case op of
+        AppendOperation -> listChildKindsData
+        ReplaceOperation -> Just [SListScope]
+        RemoveOperation -> Just [ SListScope]
 
 {-| recursive To Data
 -}

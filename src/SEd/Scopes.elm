@@ -1,6 +1,15 @@
-module SEd.Scopes exposing (..)
+module SEd.Scopes exposing
+    ( BasicScope(..)
+    , BasicOperation(..)
+    , ScopeTraits
+    , leafScopeTraits
+    , allOperations
+    )
+
 {-| Describe me please...
 -}
+
+import Set
 type BasicScope
     = StringScope
     | IntScope
@@ -8,15 +17,34 @@ type BasicScope
     | ListScope
 
 
+type BasicOperation
+    = ReplaceOperation
+    | RemoveOperation
+    | AppendOperation
+
+
+{-| A list of all possible operations for a scope.
+-}
+allOperations =
+    [ AppendOperation
+    , ReplaceOperation
+    , RemoveOperation
+    ]
 
 
 
+type alias PossibleScopes scopeKey
+    = List scopeKey
 
 
 type alias ScopeTraits scopeKey scope childKey data =
     { base: BasicScope
+    , toData: (scope -> Maybe data)
+    , operationSupports: BasicOperation -> scope -> Maybe (PossibleScopes scopeKey)
+
+
     , childKeys: scope -> Maybe (List childKey)
-    , childKindsAt: childKey -> scope -> Maybe (List (String, scopeKey))
+    , childKindsAt: childKey -> scope -> Maybe (PossibleScopes scopeKey)
     , childDataAt: childKey -> scope -> Maybe data
     , childScopeAt: childKey -> scope -> Maybe scope
 
@@ -25,14 +53,19 @@ type alias ScopeTraits scopeKey scope childKey data =
     }
 
 
+nada _ _ = Nothing
+
 leafScopeTraits =
     { base = StringScope
-    , childKeys = always Nothing
-    , childKindsAt = (\_ _ -> Nothing)
-    , childDataAt = (\_ _ -> Nothing)
-    , childScopeAt = (\_ _ -> Nothing)
+    , toData = always Nothing
+    , operationSupports = nada
 
-    , stepLeft = (\_ _ -> Nothing)
-    , stepRight = (\_ _ -> Nothing)
+    , childKeys = always Nothing
+    , childKindsAt = nada
+    , childDataAt = nada
+    , childScopeAt = nada
+
+    , stepLeft = nada
+    , stepRight = nada
     }
 
