@@ -118,6 +118,7 @@ updateWithOpHelper op newScope model path current =
         recurse pathRest childScope = updateWithOpHelper op newScope model pathRest childScope
         pathOrEmpty p = Maybe.map (\l -> [l]) p |> Maybe.withDefault []
 
+
     in case path of
         -- cannot operate on root
         [] -> Nothing

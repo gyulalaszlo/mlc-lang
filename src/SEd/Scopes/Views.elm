@@ -21,22 +21,23 @@ toolbarView model =
     let
         scope =
             currentScope model
+
+        pathListFoldStep localKey (pathBuffer, pathBitsDone) =
+            let
+                thisStepPath =
+                    pathBuffer ++ [ localKey ]
+            in
+                ( thisStepPath, pathBitsDone ++ [ ( toString localKey, thisStepPath ) ] )
+
+        pathList =
+            List.foldl pathListFoldStep ( [], [] ) model.path
+                |> Tuple.second
+
     in
         div [ class "toolbar-view" ]
             [ div [ class "path" ]
-                [ span [ class "toolbar-path-entry" ] [ text "root" ]
-                , htmlList (\( i, p ) -> toolbarPathEntry i p) <|
-                    Tuple.second <|
-                        List.foldl
-                            (\i ( pp, ps ) ->
-                                let
-                                    p =
-                                        pp ++ [ i ]
-                                in
-                                    ( p, ps ++ [ ( i, p ) ] )
-                            )
-                            ( [], [] )
-                            model.path
+                [ htmlList (\( i, p ) -> toolbarPathEntry i p) <|
+                    (("root", []) :: pathList)
                 ]
             , Html.button [ onClick Up ] [ text "Up" ]
             , Html.button [ onClick Down ] [ text "Down" ]
@@ -86,10 +87,10 @@ toolbarViewCss =
 
 {-| toolbar path entry
 -}
-toolbarPathEntry : i -> List i -> Html (Msg i)
+toolbarPathEntry : String -> List i -> Html (Msg i)
 toolbarPathEntry i path =
     div [ class "toolbar-path-entry" ]
-        [ infoRowBase "step" <| span [ onClick <| SetPath path ] [ text <| toString i ]
+        [ infoRowBase "step" <| span [ onClick <| SetPath path ] [ text i ]
         ]
 
 
@@ -98,8 +99,9 @@ toolbarPathEntry i path =
 toolbarPathEntryCss : String
 toolbarPathEntryCss =
     """
-.toolbar-path-entry { display: inline-block; line-height: 1.4em; padding: 0.3em 1em;  border-radius: 2em; border-right: 4px solid; }
-.toolbar-path-entry:before { content: " -> "; }
+.toolbar-path-entry { display: inline-block; line-height: 1.4em; padding: 0.3em 1em;  border-radius: 2em; border-right: 4px solid; cursor:pointer; }
+.toolbar-path-entry:hover { text-decoration:underline; }
+/* .toolbar-path-entry:hover:before { content: " go to -> "; } */
 """
 
 
