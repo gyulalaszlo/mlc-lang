@@ -1,7 +1,8 @@
 module SEd.Scopes.ScopeTest exposing (main)
 {-| Describe me please...
 -}
-import SEd.Scopes.ScopeEditor exposing (Model, Msg(..), modelFrom, view, update, subscriptions, css)
+import SEd.Scopes.ScopeEditor exposing (Model,  modelFrom, view, update, subscriptions, css)
+import SEd.Scopes.Msg exposing (Msg(..))
 import Html exposing (Html)
 import Html.Attributes
 import Task
