@@ -50,6 +50,18 @@ traitsFor s =
         SListScope ->
             listTraits
 
+
+empty : SExprScopeType -> Scope
+empty k =
+    case k of
+        SKeyScope ->
+            EKey ""
+
+        SListScope ->
+            EList []
+
+
+
 -- KEY TRAITS -----------------------------------------
 
 keyTraits : SExprScopeTraits
@@ -89,6 +101,9 @@ listTraits =
     , stepLeft = listStepLeft
     , stepRight = listStepRight
     , operateOnChildAt = listOperateOnChildAt
+    , appendableTypes = listAppendableTypes
+    , append = listAppend
+    , replace = listReplace
     }
 
 
@@ -162,13 +177,13 @@ listStepRight i s =
             Nothing
 
 
-listChildOperationSupports : BasicOperation -> Scope -> Maybe (List SExprScopeType)
+listChildOperationSupports : BasicOperation Scope -> Scope -> Maybe (List SExprScopeType)
 listChildOperationSupports op s =
     case op of
-        AppendOperation ->
+        AppendOperation _ ->
             listChildKindsData
 
-        ReplaceOperation ->
+        ReplaceOperation _ ->
             Just [ SListScope ]
 
         RemoveOperation ->
@@ -187,19 +202,46 @@ recursiveToData a =
             ":" ++ s
 
 
-listOperateOnChildAt: BasicOperation -> Maybe Scope -> Int -> Scope -> Maybe (Maybe Int, Scope)
-listOperateOnChildAt op maybeNew k s =
-    case (maybeNew, s, op) of
-        (_, EList es, RemoveOperation) ->
+listOperateOnChildAt: BasicOperation Scope -> Int -> Scope -> Maybe (Maybe Int, Scope)
+listOperateOnChildAt op k s =
+    case (s, op) of
+        (EList es, RemoveOperation) ->
             let new = List.Extra.removeAt k es
             in case new of
                 [] -> Just (Nothing, EList [])
                 _ -> Just (Just <| max 0 (k - 1), EList new)
 
-        (Just el, EList es, ReplaceOperation) ->
+        (EList es, ReplaceOperation el) ->
             List.Extra.setAt k el es
                 |> Maybe.map (\es -> (Just k, EList es))
 
+        (EList es, AppendOperation el) ->
+            List.Extra.setAt k el es
+                |> Maybe.map (\es -> (Just k, EList es))
         _ -> Nothing
 
+
+
+
+
 -------------------------------------
+
+listAppendableTypes: Scope -> List SExprScopeType
+listAppendableTypes scope =
+    [SKeyScope, SListScope]
+
+
+
+listAppend: Scope -> Scope -> Maybe (Int, Scope)
+listAppend new scope =
+    case scope of
+        EList es -> Just <| (List.length es, EList <| es ++ [ new ])
+        _ -> Nothing
+
+listReplace: Int -> Scope -> Scope -> Maybe Scope
+listReplace i new scope =
+    case scope of
+        EList es ->
+            List.Extra.setAt i new es
+                |> Maybe.map (\es -> EList es)
+        _ -> Nothing

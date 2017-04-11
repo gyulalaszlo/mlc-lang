@@ -17,7 +17,7 @@ import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import List.Extra
 import Task
-import SEd.Scopes exposing (BasicOperation(RemoveOperation, ReplaceOperation), ScopeTraits)
+import SEd.Scopes exposing (BasicOperation(AppendOperation, RemoveOperation, ReplaceOperation), ScopeTraits)
 import SEd.Scopes.Model as Model exposing (sExprAt, scopeAndTraitsForPath, scopeTraitsFor)
 import SEd.Scopes.Msg exposing (Msg(..))
 import SEd.Scopes.Views as Views
@@ -45,7 +45,7 @@ modelFrom =
 -- SUBSCRIPTIONS
 
 
-subscriptions : Model k s i d -> Sub (Msg i)
+subscriptions : Model k s i d -> Sub (Msg s i)
 subscriptions =
     Model.subscriptions
 
@@ -54,7 +54,7 @@ subscriptions =
 -- UPDATE
 
 
-update : Msg i -> Model k s i d -> ( Model k s i d, Cmd (Msg i) )
+update : Msg s i -> Model k s i d -> ( Model k s i d, Cmd (Msg s i) )
 update msg model =
     let
         orNothing =
@@ -84,16 +84,33 @@ update msg model =
                 updateStep .stepRight model |> orNothing
 
             OpRemove ->
-                updateWithOp RemoveOperation Nothing model
-                    |> Maybe.map (\m -> (m, Cmd.none))
---                    |> Maybe.map updateData
+                updateWithOp
+                    (\traits i s ->
+                        let pathOrEmpty p = Maybe.map (\l -> [l]) p |> Maybe.withDefault []
+                        in traits.operateOnChildAt RemoveOperation i s
+                            |> Maybe.map (\(newC, newS) -> (pathOrEmpty newC , newS) )) model
                     |> orNothing
 
+            OpAppend scope ->
+--                updateWithOp
+--                    (\traits i s ->
+--                        let child = traits.childScopeAt i s
+--                            childTraits = Maybe.map (\c -> scopeTraitsFor model.traits c) child
+--                        in childTraits
+--                            |> Maybe.map (\childTraits -> childTraits.append scope child)
+--                            |> Maybe.map (\(p,s) -> ([p], s))) model
+----                        let pathOrEmpty p = Maybe.map (\l -> [l]) p |> Maybe.withDefault []
+----                        in traits.operateOnChildAt RemoveOperation i s
+----                            |> Maybe.map (\(newC, newS) -> (pathOrEmpty newC , newS) )) model
+--                    |> orNothing
+                (model, Cmd.none)
+--                updateWithOp (AppendOperation scope) model
+--                    |> orNothing
 
 
 {-| try to step into the current context
 -}
-stepDown : Model k s i d -> Maybe ( Model k s i d, Cmd (Msg i) )
+stepDown : Model k s i d -> Maybe ( Model k s i d, Cmd (Msg s i) )
 stepDown model =
     scopeAndTraitsForPath model.path model
         |> Maybe.andThen (\( current, traits ) -> traits.childKeys current)
@@ -102,20 +119,21 @@ stepDown model =
 
 
 
-updateWithOp : BasicOperation -> Maybe s -> Model k s i d  -> Maybe (Model k s i d)
-updateWithOp op newScope model =
-    updateWithOpHelper op newScope model model.path model.data
+updateWithOp : (ScopeTraits k s i d -> i -> s -> Maybe (List i, s)) -> Model k s i d  -> Maybe (Model k s i d, Cmd (Msg s i))
+updateWithOp op model =
+    updateWithOpHelper op model model.path model.data
         |> Maybe.map (\(newPath, newData) -> { model | data = newData, path = newPath})
+        |> Maybe.map (\m -> (m, Cmd.none))
 
 
 
 {-| update With Op
 -}
-updateWithOpHelper : BasicOperation -> Maybe s -> Model k s i d -> List i -> s -> Maybe (List i, s)
-updateWithOpHelper op newScope model path current =
+updateWithOpHelper : (ScopeTraits k s i d -> i -> s -> Maybe (List i, s)) -> Model k s i d -> List i -> s -> Maybe (List i, s)
+updateWithOpHelper op model path current =
 
     let traits = scopeTraitsFor model.traits current
-        recurse pathRest childScope = updateWithOpHelper op newScope model pathRest childScope
+        recurse pathRest childScope = updateWithOpHelper op model pathRest childScope
         pathOrEmpty p = Maybe.map (\l -> [l]) p |> Maybe.withDefault []
 
 
@@ -124,8 +142,7 @@ updateWithOpHelper op newScope model path current =
         [] -> Nothing
         -- single key means this is our target
         [pathHead] ->
-            traits.operateOnChildAt op newScope pathHead current
-                |> Maybe.map (\(newC, newS) -> (pathOrEmpty newC , newS) )
+            op traits pathHead current
         -- go deeper and update
         pathHead :: pathRest ->
             -- find the child if there is any
@@ -134,9 +151,8 @@ updateWithOpHelper op newScope model path current =
                 |> Maybe.andThen (\childScope -> recurse pathRest childScope)
                 -- then replace the current scopes version with the updated one
                 |> Maybe.andThen (\(newPath, child) ->
-                     traits.operateOnChildAt ReplaceOperation (Just  child) pathHead current
-                        |> Maybe.map (\(k,s) -> (pathOrEmpty k ++ newPath, s))
-                    )
+                    traits.replace pathHead child current
+                        |> Maybe.map (\s -> (pathHead :: newPath, s)))
 
 
 
@@ -151,10 +167,10 @@ updatePath :
     (List i -> s -> ScopeTraits k s i d -> Maybe (List i))
     -> List i
     -> Model k s i d
-    -> Maybe ( Model k s i d, Cmd (Msg i) )
+    -> Maybe ( Model k s i d, Cmd (Msg s i) )
 updatePath fn path model =
     let
-        setPath : List i -> ( Model k s i d, Cmd (Msg i) )
+        setPath : List i -> ( Model k s i d, Cmd (Msg s i) )
         setPath newPath =
             ( model, Task.perform SetPath (Task.succeed newPath) )
     in
@@ -167,7 +183,7 @@ updatePath fn path model =
 updateStep :
     (ScopeTraits k s i d -> i -> s -> Maybe i)
     -> Model k s i d
-    -> Maybe ( Model k s i d, Cmd (Msg i) )
+    -> Maybe ( Model k s i d, Cmd (Msg s i) )
 updateStep stepFn model =
     let
         newPath ps =
@@ -190,11 +206,10 @@ updateStep stepFn model =
 
 {-| view
 -}
-view : Model k s i d -> Html (Msg i)
+view : Model k s i d -> Html (Msg s i)
 view model =
     div [ class "scope-editor-view" ]
-        [ text <| toString model
-        , Views.toolbarView model
+        [ Views.toolbarView model
         , sExprAt model.traits model.path model.data
             |> Maybe.map (Views.sExpressionView model.traits)
             |> Maybe.withDefault (text "Cannot find SExpr at path")

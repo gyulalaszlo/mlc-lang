@@ -8,7 +8,7 @@ module SEd.Scopes.Msg exposing (..)
 {-| Basic commands to be issued to the scope editor / navigator.
 key is the "node index" type (usually int).
 -}
-type Msg key
+type Msg scope key
     = AddPath key
     | SetPath (List key)
     | Up
@@ -17,5 +17,6 @@ type Msg key
     | Right
 
     | OpRemove
+    | OpAppend scope
 
 

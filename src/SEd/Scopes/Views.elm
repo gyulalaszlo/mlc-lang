@@ -6,7 +6,7 @@ module SEd.Scopes.Views exposing (..)
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
-import SEd.Scopes exposing (BasicOperation, ScopeTraits, allOperations)
+import SEd.Scopes exposing (BasicOperation, ScopeTraits)
 import SEd.Scopes.Model exposing (Model, ScopeLikeTraits, currentScope, scopeAndTraitsForPath)
 import SEd.Scopes.Msg exposing (Msg(..))
 
@@ -16,7 +16,7 @@ import SEd.Scopes.Msg exposing (Msg(..))
 
 {-| toolbar view
 -}
-toolbarView : Model k s i d -> Html (Msg i)
+toolbarView : Model k s i d -> Html (Msg s i)
 toolbarView model =
     let
         scope =
@@ -39,24 +39,19 @@ toolbarView model =
                 [ htmlList (\( i, p ) -> toolbarPathEntry i p) <|
                     (("root", []) :: pathList)
                 ]
-            , Html.button [ onClick Up ] [ text "Up" ]
-            , Html.button [ onClick Down ] [ text "Down" ]
-            , Html.button [ onClick Left ] [ text "<- Left" ]
-            , Html.button [ onClick Right ] [ text "Right -> " ]
-            , text " .. "
-            , Html.button [ onClick OpRemove ] [ text "REMOVE !=" ]
-            , scopeAndTraitsForPath model.path model
-                |> Maybe.map
-                    (\( c, t ) ->
-                        List.filterMap
-                            (\op ->
-                                t.operationSupports op c
-                                    |> Maybe.map (\s -> ( op, s ))
-                            )
-                            allOperations
-                    )
-                |> Maybe.map (htmlList (\( op, s ) -> operationsView op s))
-                |> Maybe.withDefault (text "No supported operations")
+            , toolButtonsView model
+--            , scopeAndTraitsForPath model.path model
+--                |> Maybe.map
+--                    (\( c, t ) ->
+--                        List.filterMap
+--                            (\op ->
+--                                t.operationSupports op c
+--                                    |> Maybe.map (\s -> ( op, s ))
+--                            )
+--                            allOperations
+--                    )
+--                |> Maybe.map (htmlList (\( op, s ) -> operationsView op s))
+--                |> Maybe.withDefault (text "No supported operations")
             ]
 
 
@@ -82,12 +77,60 @@ toolbarViewCss =
 
 
 
+-- VIEW: toolButtonsView
+
+
+
+{-| tool buttons view
+-}
+toolButtonsView : Model k s i d -> Html (Msg s i)
+toolButtonsView model =
+    div [ class "tool-buttons-view" ]
+        [ btn Up "Up"
+        , btn Down "Down"
+        , btn Left "<- Left"
+        , btn Right "Right -> "
+        , text " .. "
+        , btn OpRemove "REMOVE !="
+
+        , scopeAndTraitsForPath model.path model
+            |> Maybe.map (\(s,traits)-> traits.appendableTypes s )
+            |> Maybe.withDefault []
+            |> List.map (\k ->
+
+                btn (OpAppend (model.traits.empty k)) <| "Append " ++ toString k
+            )
+            |> span []
+--        , btn (OpAppend ) "Insert Key"
+        ]
+
+
+btn : msg -> String -> Html msg
+btn msg label =
+    Html.button
+        [ class "btn toolbar-btn"
+        , onClick msg]
+        [ text label ]
+
+{-| CSS parts for toolButtonsView
+-}
+toolButtonsViewCss : String
+toolButtonsViewCss = """
+.tool-buttons-view .toolbar-btn {}
+
+"""
+
+
+
+
+
+
 -- VIEW: toolbarPathEntry
 
 
 {-| toolbar path entry
 -}
-toolbarPathEntry : String -> List i -> Html (Msg i)
+toolbarPathEntry : String -> List i -> Html (Msg s i)
 toolbarPathEntry i path =
     div [ class "toolbar-path-entry" ]
         [ infoRowBase "step" <| span [ onClick <| SetPath path ] [ text i ]
@@ -101,7 +144,6 @@ toolbarPathEntryCss =
     """
 .toolbar-path-entry { display: inline-block; line-height: 1.4em; padding: 0.3em 1em;  border-radius: 2em; border-right: 4px solid; cursor:pointer; }
 .toolbar-path-entry:hover { text-decoration:underline; }
-/* .toolbar-path-entry:hover:before { content: " go to -> "; } */
 """
 
 
@@ -111,7 +153,7 @@ toolbarPathEntryCss =
 
 {-| operations view
 -}
-operationsView : BasicOperation -> List k -> Html (Msg i)
+operationsView : BasicOperation -> List k -> Html (Msg s i)
 operationsView op scopes =
     div [ class "operations-view" ]
         [ span [ class "operation-name" ] [ text <| toString op ]
@@ -154,7 +196,7 @@ htmlList fn es =
 
 {-| s expression view
 -}
-sExpressionView : ScopeLikeTraits k s i d -> s -> Html (Msg i)
+sExpressionView : ScopeLikeTraits k s i d -> s -> Html (Msg s i)
 sExpressionView scopeTraits scope =
     let
         kind =
@@ -190,10 +232,11 @@ sExpressionViewCss =
 .s-expr-view .info-row { display: block; }
 
 .s-expr-view .kind { font-weight: bold;  }
+.s-expr-view .data { font-size: 150%; padding: 1em; border:2px dotted;  }
 
 .s-expr-view .kind:before { content: "kind .. " }
 .s-expr-view .with:before { content: "with .. " }
-.s-expr-view .data:before { content: "data .. " }
+/* .s-expr-view .data:before { content: "data .. " } */
 .s-expr-view .base:before { content: "base .. " }
 """
 
@@ -204,13 +247,14 @@ sExpressionViewCss =
 
 {-| child kind and data view
 -}
-childKindAndDataView : ScopeTraits k s i d -> i -> s -> Html (Msg i)
+childKindAndDataView : ScopeTraits k s i d -> i -> s -> Html (Msg s i)
 childKindAndDataView traits i scope =
     div [ class "child-kind-and-data-view" ]
         [ Html.button [ class "idx", onClick (AddPath i) ] [ text <| toString i ]
         , traits.childDataAt i scope
             |> Maybe.map childDataView
             |> Maybe.withDefault (text "nada")
+            |> (\content -> div [ onClick (AddPath i) ] [ content ] )
         , traits.childKindsAt i scope
             |> Maybe.map (htmlList (\k -> childKindView k scope))
             |> Maybe.map (infoRowBase "opts")
@@ -224,6 +268,8 @@ childKindAndDataViewCss : String
 childKindAndDataViewCss =
     """
 .child-kind-and-data-view {  }
+.child-kind-and-data-view .data { cursor:pointer; }
+.child-kind-and-data-view .data:hover { text-decoration: underline; }
 .child-kind-and-data-view .idx { cursor: pointer; text-decoration: underline; }
 .child-kind-and-data-view .idx:before { content: "#"; }
 .child-kind-and-data-view .opts:before { content: "opts : "; }
@@ -236,7 +282,7 @@ childKindAndDataViewCss =
 
 {-| child kind views
 -}
-childKindView : k -> s -> Html (Msg i)
+childKindView : k -> s -> Html (Msg s i)
 childKindView scopeType scope =
     Html.li [ class "child-kind-views" ]
         [ infoRow "kind" <| toString scopeType
@@ -259,7 +305,7 @@ childKindViewsCss =
 
 {-| child data view
 -}
-childDataView : d -> Html (Msg i)
+childDataView : d -> Html (Msg s i)
 childDataView data =
     div [ class "child-data-view" ]
         [ infoRow "data" <| toString data
@@ -277,8 +323,10 @@ childDataViewCss =
 
 css : String
 css =
+--    Helpers.CssBit.templateWith ()
     String.join "\n"
         [ toolbarViewCss
+        , toolButtonsViewCss
         , toolbarPathEntryCss
         , operationsViewCss
         , sExpressionViewCss

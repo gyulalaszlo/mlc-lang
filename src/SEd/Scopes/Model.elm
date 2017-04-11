@@ -15,6 +15,7 @@ import SEd.Scopes.Msg exposing (Msg)
 type alias ScopeLikeTraits kind scope childKey data =
     { kindOf : scope -> kind
     , traitsFor : kind -> ScopeTraits kind scope childKey data
+    , empty: kind -> scope
     }
 
 
@@ -86,6 +87,6 @@ scopeTraitsFor traits scope =
 -- SUBSCRIPTIONS
 
 
-subscriptions : Model k s i d -> Sub (Msg i)
+subscriptions : Model k s i d -> Sub (Msg s i)
 subscriptions model =
     Sub.none

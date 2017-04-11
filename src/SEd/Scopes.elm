@@ -3,7 +3,6 @@ module SEd.Scopes exposing
     , BasicOperation(..)
     , ScopeTraits
     , leafScopeTraits
-    , allOperations
     )
 
 {-| Describe me please...
@@ -17,19 +16,11 @@ type BasicScope
     | ListScope
 
 
-type BasicOperation
-    = ReplaceOperation
+type BasicOperation scope
+    = ReplaceOperation scope
     | RemoveOperation
-    | AppendOperation
+    | AppendOperation scope
 
-
-{-| A list of all possible operations for a scope.
--}
-allOperations =
-    [ AppendOperation
-    , ReplaceOperation
-    , RemoveOperation
-    ]
 
 
 
@@ -40,7 +31,7 @@ type alias PossibleScopes scopeKey
 {-| Performs a basic operation on a child and returns Just the updated version of
 scope if the operation succeeded and Nothing otherwise.
 -}
-type alias ChildOperation scope childKey = BasicOperation -> childKey -> scope -> Maybe scope
+type alias ChildOperation scope childKey = BasicOperation scope -> childKey -> scope -> Maybe scope
 
 
 {-| Groups behaviours for a scope
@@ -48,7 +39,7 @@ type alias ChildOperation scope childKey = BasicOperation -> childKey -> scope -
 type alias ScopeTraits scopeKey scope childKey data =
     { base: BasicScope
     , toData: (scope -> Maybe data)
-    , operationSupports: BasicOperation -> scope -> Maybe (PossibleScopes scopeKey)
+    , operationSupports: BasicOperation scope -> scope -> Maybe (PossibleScopes scopeKey)
 
 
     , childKeys: scope -> Maybe (List childKey)
@@ -59,7 +50,11 @@ type alias ScopeTraits scopeKey scope childKey data =
     , stepLeft: childKey -> scope -> Maybe childKey
     , stepRight: childKey -> scope -> Maybe childKey
 
-    , operateOnChildAt: BasicOperation -> Maybe scope -> childKey -> scope -> Maybe (Maybe childKey, scope)
+    , operateOnChildAt: BasicOperation scope -> childKey -> scope -> Maybe (Maybe childKey, scope)
+
+    , appendableTypes: scope -> List scopeKey
+    , append: scope -> scope -> Maybe (childKey, scope)
+    , replace: childKey -> scope -> scope -> Maybe scope
     }
 
 
@@ -78,6 +73,9 @@ leafScopeTraits =
     , stepLeft = nada
     , stepRight = nada
 
-    , operateOnChildAt = (\_ _ _ _ -> Nothing)
+    , operateOnChildAt = (\_ _ _ -> Nothing)
+    , appendableTypes = always []
+    , append = (\_ _ -> Nothing)
+    , replace = (\_ new _ -> Just new)
     }
 
