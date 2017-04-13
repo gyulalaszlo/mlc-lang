@@ -6,8 +6,8 @@ module SEd.Scopes.Views exposing (..)
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
-import SEd.Scopes exposing (BasicOperation, ScopeTraits)
-import SEd.Scopes.Model exposing (Model, ScopeLikeTraits, currentScope, scopeAndTraitsForPath)
+import SEd.Scopes exposing (ScopeLikeTraits, ScopeTraits)
+import SEd.Scopes.Model exposing (Model,  currentScope, scopeAndTraitsForPath)
 import SEd.Scopes.Msg exposing (Msg(..))
 
 
@@ -153,7 +153,7 @@ toolbarPathEntryCss =
 
 {-| operations view
 -}
-operationsView : BasicOperation -> List k -> Html (Msg s i)
+--operationsView : BasicOperation -> List k -> Html (Msg s i)
 operationsView op scopes =
     div [ class "operations-view" ]
         [ span [ class "operation-name" ] [ text <| toString op ]
@@ -251,7 +251,7 @@ childKindAndDataView : ScopeTraits k s i d -> i -> s -> Html (Msg s i)
 childKindAndDataView traits i scope =
     div [ class "child-kind-and-data-view" ]
         [ Html.button [ class "idx", onClick (AddPath i) ] [ text <| toString i ]
-        , traits.childDataAt i scope
+        , traits.childScopeAt i scope
             |> Maybe.map childDataView
             |> Maybe.withDefault (text "nada")
             |> (\content -> div [ onClick (AddPath i) ] [ content ] )

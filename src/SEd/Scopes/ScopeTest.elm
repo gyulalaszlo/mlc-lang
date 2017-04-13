@@ -16,9 +16,9 @@ initialModel =
         , empty = empty
         }
         (EList [ EKey "if"
-               , EList [EKey "=", EKey "i", EKey "len"]
-               , EList [ EKey "i"]
-               , EList [ EKey "len"]
+               , EList [EKey "less-then?", EKey "i", EKey "len"]
+               , EList [EKey "+", EKey "i", EKey "1"]
+               , EList [EKey "len"]
                 ])
 
 

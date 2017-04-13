@@ -3,20 +3,13 @@ module SEd.Scopes.Model exposing (..)
 {-| Describe me please...
 -}
 
-import SEd.Scopes exposing (ScopeTraits)
+import Error exposing (Error)
+import SEd.Scopes exposing (OpResult, OpSuccess, ScopeTraits, ScopeLikeTraits)
 import SEd.Scopes.Msg exposing (Msg)
 
 
 -- MODEL
 
-
-{-| Traits
--}
-type alias ScopeLikeTraits kind scope childKey data =
-    { kindOf : scope -> kind
-    , traitsFor : kind -> ScopeTraits kind scope childKey data
-    , empty: kind -> scope
-    }
 
 
 type alias Model kind scope childKey data =
@@ -24,6 +17,7 @@ type alias Model kind scope childKey data =
     , path :
         List childKey
         --(kind, childKey)
+    , errors : List Error
     , traits : ScopeLikeTraits kind scope childKey data
     }
 
@@ -32,6 +26,7 @@ from : ScopeLikeTraits k s i d -> s -> Model k s i d
 from traits scope =
     { data = scope
     , path = []
+    , errors = []
     , traits = traits
     }
 
@@ -71,17 +66,6 @@ sExprAt scopeTraits path scope =
             in
                 traits.childScopeAt i scope
                     |> Maybe.andThen (sExprAt scopeTraits path)
-
-
-
-{-| Gets the scope traits for a scope
-
-    traits.traitsFor <| traits.kindOf scope
-
--}
-scopeTraitsFor : ScopeLikeTraits k s i d -> s -> ScopeTraits k s i d
-scopeTraitsFor traits scope =
-    traits.traitsFor <| traits.kindOf scope
 
 
 -- SUBSCRIPTIONS

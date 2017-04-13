@@ -3,6 +3,7 @@ module SEd.Scopes.SExprScopes exposing (..)
 {-| Describe me please...
 -}
 
+import Error
 import List.Extra
 import SEd.Scopes exposing (..)
 
@@ -68,22 +69,9 @@ keyTraits : SExprScopeTraits
 keyTraits =
     { leafScopeTraits
         | base = StringScope
-        , operationSupports = (\_ _ -> Just [ SKeyScope ])
         , toData = Just << recursiveToData
-        , childDataAt = keyChildData
     }
 
-
-{-| keyChildData
--}
-keyChildData : Int -> Scope -> Maybe SExprData
-keyChildData i s =
-    case s of
-        EKey s ->
-            Just s
-
-        _ ->
-            Nothing
 
 
 -- LIST TRAITS -----------------------------------------
@@ -93,17 +81,16 @@ listTraits : SExprScopeTraits
 listTraits =
     { base = ListScope
     , toData = Just << recursiveToData
-    , operationSupports = listChildOperationSupports
     , childKeys = listChildKeys
     , childKindsAt = listChildKinds
     , childDataAt = listChildData
     , childScopeAt = listChildScopeFor
     , stepLeft = listStepLeft
     , stepRight = listStepRight
-    , operateOnChildAt = listOperateOnChildAt
     , appendableTypes = listAppendableTypes
     , append = listAppend
     , replace = listReplace
+    , remove = listRemove
     }
 
 
@@ -177,17 +164,51 @@ listStepRight i s =
             Nothing
 
 
-listChildOperationSupports : BasicOperation Scope -> Scope -> Maybe (List SExprScopeType)
-listChildOperationSupports op s =
-    case op of
-        AppendOperation _ ->
-            listChildKindsData
 
-        ReplaceOperation _ ->
-            Just [ SListScope ]
 
-        RemoveOperation ->
-            Just [ SListScope ]
+-------------------------------------
+
+listAppendableTypes: Scope -> List SExprScopeType
+listAppendableTypes scope =
+    [SKeyScope, SListScope]
+
+
+
+listAppend: Scope -> Scope -> OpResult Scope Int
+listAppend new scope =
+    case scope of
+        EList es -> opOk [List.length es] (EList <| es ++ [ new ])
+        _ -> Error.err "Type error."
+
+
+listReplace: Int -> Scope -> Scope -> OpResult Scope Int
+listReplace i new scope =
+    let err es =
+            Error.errMsg
+                ["Cannot find child at"
+                , toString i , "in", toString es]
+    in case scope of
+        EList es ->
+            List.Extra.setAt i new es
+                |> Maybe.map (opOk [i] << EList)
+                |> Maybe.withDefault (err es)
+        _ -> Error.err "Type error."
+
+
+listRemove : Int -> Scope -> OpResult Scope Int
+listRemove i s =
+    case s of
+        EList es ->
+            let new = List.Extra.removeAt i es
+            in case new of
+                [] -> opOk [] <| EList []
+                _ -> opOk [max 0 (i - 1)] <| EList new
+        _ -> Error.err "Type error."
+
+
+
+
+-- RECURSIVE TO DATA -----------------------------------
 
 
 {-| recursive To Data
@@ -199,49 +220,6 @@ recursiveToData a =
             "(" ++ String.join " " (List.map recursiveToData es) ++ ")"
 
         EKey s ->
-            ":" ++ s
+            s
+--            ":" ++ s
 
-
-listOperateOnChildAt: BasicOperation Scope -> Int -> Scope -> Maybe (Maybe Int, Scope)
-listOperateOnChildAt op k s =
-    case (s, op) of
-        (EList es, RemoveOperation) ->
-            let new = List.Extra.removeAt k es
-            in case new of
-                [] -> Just (Nothing, EList [])
-                _ -> Just (Just <| max 0 (k - 1), EList new)
-
-        (EList es, ReplaceOperation el) ->
-            List.Extra.setAt k el es
-                |> Maybe.map (\es -> (Just k, EList es))
-
-        (EList es, AppendOperation el) ->
-            List.Extra.setAt k el es
-                |> Maybe.map (\es -> (Just k, EList es))
-        _ -> Nothing
-
-
-
-
-
--------------------------------------
-
-listAppendableTypes: Scope -> List SExprScopeType
-listAppendableTypes scope =
-    [SKeyScope, SListScope]
-
-
-
-listAppend: Scope -> Scope -> Maybe (Int, Scope)
-listAppend new scope =
-    case scope of
-        EList es -> Just <| (List.length es, EList <| es ++ [ new ])
-        _ -> Nothing
-
-listReplace: Int -> Scope -> Scope -> Maybe Scope
-listReplace i new scope =
-    case scope of
-        EList es ->
-            List.Extra.setAt i new es
-                |> Maybe.map (\es -> EList es)
-        _ -> Nothing
