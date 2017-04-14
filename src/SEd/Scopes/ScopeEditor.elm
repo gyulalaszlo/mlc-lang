@@ -11,12 +11,21 @@ module SEd.Scopes.ScopeEditor
 {-| Describe me please...
 -}
 
+import Color
+import Css.Background
+import Css.Bits as Css exposing (emptyTheme)
+import Css.Font
+import Css.Padding
+import Css.Rectangle
+import Css.Selector
+import Css.Size
 import Dict exposing (Dict)
 import Error
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import List.Extra
+import Regex
 import Task
 import SEd.Scopes as Scopes exposing (OpResult, Path, ScopeTraits, scopeTraitsFor)
 import SEd.Scopes.Model as Model exposing (sExprAt, scopeAndTraitsForPath)
@@ -93,7 +102,8 @@ update msg model =
                 updateStep .stepRight model |> orNothing
 
             OpRemove ->
-                (model, Cmd.none)
+                doRemove model.traits model.path model.data
+                    |> fromOpResult
 --                updateWithOp
 --                    (\traits i s -> traits.remove i s) model
 --                    |> orNothing
@@ -101,22 +111,10 @@ update msg model =
             OpAppend scope ->
                 doAppend model.traits model.path scope model.data
                     |> fromOpResult
---                    |> Result.map (\{cursor,new} ->
---                        ({ model | data = new, cursor = cursor }, Cmd.none))
---                    |> Result.mapError (\err ->
---                        ({ model | errors = err :: model.errors }, Cmd.none))
---                    |> Result.
---                (model, Cmd.none)
---                updateWithOp
---                    (\traits i s ->
---                        mapChild model.traits (\ts i s ->
---                            ts.append scope s
---                                |> Maybe.map (\(i,s) ->  ([i], s))
---                            ) i s
---                        ) model
---                    |> orNothing
 
 
+
+-- APPEND ----------------------------------------------------------------------
 
 doAppend : ScopeLikeTraits k s i d -> Path i -> s -> s -> OpResult s i
 doAppend traits path new s =
@@ -125,121 +123,14 @@ doAppend traits path new s =
         i :: is -> Scopes.update traits i (doAppend traits is new) s
 
 
--- SCOPE STEPPING ---------------------------------
---
---
---{-| Shortcut for getting a child scope for a key
----}
---childAt: ScopeLikeTraits k s i d -> i -> s -> Maybe (List i, s)
---childAt traits i scope =
---    let
---        ts = scopeTraitsFor traits scope
---    in
---        ts.childScopeAt i scope
---            |> Maybe.map (\s -> ([i],s))
---
---
---{-|
----}
---mapChild: ScopeLikeTraits k s i d -> (ScopeTraits k s i d -> i -> s -> Maybe (List i, s)) -> i -> s -> Maybe (List i, s)
---mapChild treeTraits fn i scope =
---    let traits = scopeTraitsFor treeTraits scope
---    in
---        traits.childScopeAt i scope
---            |> Maybe.andThen (fn traits i)
---            |> Maybe.andThen (\(ps, new) ->
---                traits.replace i new scope
---                    |> Maybe.map (\ss -> (i :: ps, ss) )
---                )
-----            |> Maybe.map (\ss -> ([i], ss))
---
---
---{-| Applies the function to the scope pointed to by the tip of `path`
----}
---mapPathHead : ScopeLikeTraits k s i d -> (ScopeTraits k s i d -> s -> Maybe (List i, s)) -> List i -> s -> Maybe (List i,s)
---mapPathHead traits fn path s =
---    let ts = scopeTraitsFor traits s
---    in case path of
---        [] -> fn ts s
---        i :: is ->
---            ts.childScopeAt i s
---                |> Maybe.andThen (\child -> mapPathHead traits fn is child)
---                |> Maybe.andThen (\(is,ss) -> ts.replace i ss s)
---
+-- REMOVE ----------------------------------------------------------------------
 
-
---mapPathTail :
-
-{-
-
-tree ops:
-
-removeAt path (needs parent)
-replaceAt path with (needs parent)
-
-appendTo path what (needs head)
-
--}
-
-
---appendToPath: ScopeLikeTraits k s i d -> Path i -> s -> s -> OpResult k s
---appendToPath traits p new s  =
---    let err i = Error.makeMsg ["Cannot find child at", toString i]
---    in case p of
---        [] -> ((scopeTraitsFor traits s) |> .append) new s
---        i :: is ->
---            traits.childScopeAt i s
---                |> Result.fromMaybe (err i)
---                |> Result.andThen (appendToPath traits is new)
---                |> Result.andThen (\{key, new} -> traits.replace )
-
-
-
---
---
---
---
---
---{-| update the sarget of the current path
----}
---updateWithOp : (ScopeTraits k s i d -> i -> s -> Maybe (List i, s)) -> Model k s i d  -> Maybe (Model k s i d, Cmd (Msg s i))
---updateWithOp op model =
---    updateWithOpHelper op model model.path model.data
---        |> Maybe.map (\(newPath, newData) -> { model | data = newData, path = newPath})
---        |> Maybe.map (\m -> (m, Cmd.none))
---
---
---
---updateWithOpHelper : (ScopeTraits k s i d -> i -> s -> Maybe (List i, s)) -> Model k s i d -> List i -> s -> Maybe (List i, s)
---updateWithOpHelper op model path current =
---
---    let traits = scopeTraitsFor model.traits current
---        recurse pathRest childScope = updateWithOpHelper op model pathRest childScope
---        pathOrEmpty p = Maybe.map (\l -> [l]) p |> Maybe.withDefault []
---
---
---    in case path of
---        -- cannot operate on root
---        [] -> Nothing
---        -- single key means this is our target
---        [pathHead] ->
---            op traits pathHead current
---        -- go deeper and update
---        pathHead :: pathRest ->
---            -- find the child if there is any
---            traits.childScopeAt pathHead current
---                -- recurse with the op on the child if there is any
---                |> Maybe.andThen (\childScope -> recurse pathRest childScope)
---                -- then replace the current scopes version with the updated one
---                |> Maybe.andThen (\(newPath, child) ->
---                    traits.replace pathHead child current
---                        |> Maybe.map (\s -> (pathHead :: newPath, s)))
---
---
---
-
--- CURSOR UPDATE ----------------------------------
-
+doRemove : ScopeLikeTraits k s i d -> Path i -> s -> OpResult s i
+doRemove traits path s =
+    case path of
+        [] -> Error.err "Cannot remove the root"
+        [i] -> Scopes.remove traits i s
+        i :: is -> Scopes.update traits i (doRemove traits is) s
 
 {-| try to step into the current context
 -}
@@ -304,11 +195,12 @@ pathOrEmpty p =
 -}
 view : Model k s i d -> Html (Msg s i)
 view model =
-    div [ class "scope-editor-view" ]
+    div [class "scope-editor-view" ]
         [ Views.toolbarView model
         , sExprAt model.traits model.path model.data
             |> Maybe.map (Views.sExpressionView model.traits)
             |> Maybe.withDefault (text "Cannot find SExpr at path")
+
         ]
 
 
@@ -321,9 +213,11 @@ viewCss =
 """
 
 
+
+
 css : String
 css =
-    String.join "\n"
+    String.join "\n\n"
         [ viewCss
         , Views.css
         ]

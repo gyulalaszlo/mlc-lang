@@ -10,7 +10,7 @@ module SEd.Scopes exposing
 
 
     , ScopeLikeTraits
-    , scopeTraitsFor, replace, update, append
+    , scopeTraitsFor, replace, update, append, remove
     )
 
 {-| Describe me please...
@@ -18,6 +18,8 @@ module SEd.Scopes exposing
 
 import Error exposing (Error)
 import Set
+
+
 type BasicScope
     = StringScope
     | IntScope
@@ -66,9 +68,41 @@ opErr e = Err e
 -- SCOPE TRAITS ----------------------------------------------------------------
 
 
-{-|
-}
-} Groups behaviours for a scope
+{-| All scopes need these traits
+-}
+type alias GenericScopeTraits scope data =
+    { fromData: (data -> scope)
+    , toData: (scope -> data)
+
+    }
+
+{-| Scope traits for string-based scopes
+-}
+type alias StringScopeTraits scope =
+    { toString : scope -> String
+    , fromString : String -> scope
+    }
+
+{-| List scope
+-}
+type alias ListScopeTraits scopeKey scope childKey data =
+    { childKeys: scope -> Maybe (List childKey)
+    , childKindsAt: childKey -> scope -> Maybe (PossibleScopes scopeKey)
+    , childDataAt: childKey -> scope -> Maybe data
+    , childScopeAt: childKey -> scope -> Maybe scope
+
+    , appendableTypes: scope -> List scopeKey
+    -- appends a new scope to the end of the target
+    , append: scope -> scope -> OpResult scope childKey
+    -- replace a child of a scope with a new scope
+    , replace: childKey -> scope -> scope -> OpResult scope childKey
+    -- remove a child from a scope by key
+    , remove: childKey -> scope -> OpResult scope childKey
+    }
+
+
+
+{-| Groups behaviours for a scope
 -}
 type alias ScopeTraits scopeKey scope childKey data =
     { base: BasicScope
@@ -148,6 +182,10 @@ append traits new s =
     let ts = scopeTraitsFor traits s
     in ts.append new s
 
+remove : ScopeLikeTraits k s i d -> i -> s -> OpResult s i
+remove traits i s =
+    let ts = scopeTraitsFor traits s
+    in ts.remove i s
 
 update : ScopeLikeTraits k s i d -> i -> (s -> OpResult s i) -> s -> OpResult s i
 update traits i fn s =

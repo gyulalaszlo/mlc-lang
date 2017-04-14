@@ -3,10 +3,17 @@ module SEd.Scopes.Views exposing (..)
 {-| Describe me please...
 -}
 
+import Color
+import Css.Background
+import Css.Bits as Css exposing (borders)
+import Css.Border
+import Css.Font
+import Css.Rectangle
+import Css.Size exposing (em)
 import Html exposing (Html, div, span, text)
-import Html.Attributes exposing (class)
+import Html.Attributes exposing (class, type_, value)
 import Html.Events exposing (onClick)
-import SEd.Scopes exposing (ScopeLikeTraits, ScopeTraits)
+import SEd.Scopes as Scopes exposing (ScopeLikeTraits, ScopeTraits, scopeTraitsFor)
 import SEd.Scopes.Model exposing (Model,  currentScope, scopeAndTraitsForPath)
 import SEd.Scopes.Msg exposing (Msg(..))
 
@@ -34,24 +41,17 @@ toolbarView model =
                 |> Tuple.second
 
     in
-        div [ class "toolbar-view" ]
-            [ div [ class "path" ]
+--        Css.div toolbarViewClasses.main
+        div [class "toolbar-view"]
+--            [ Css.div toolbarViewClasses.path
+            [ div [class "path"]
                 [ htmlList (\( i, p ) -> toolbarPathEntry i p) <|
                     (("root", []) :: pathList)
                 ]
             , toolButtonsView model
---            , scopeAndTraitsForPath model.path model
---                |> Maybe.map
---                    (\( c, t ) ->
---                        List.filterMap
---                            (\op ->
---                                t.operationSupports op c
---                                    |> Maybe.map (\s -> ( op, s ))
---                            )
---                            allOperations
---                    )
---                |> Maybe.map (htmlList (\( op, s ) -> operationsView op s))
---                |> Maybe.withDefault (text "No supported operations")
+            , case scope of
+                Nothing -> text ""
+                Just s -> stringScopeEditorView (scopeTraitsFor model.traits s) s
             ]
 
 
@@ -73,8 +73,30 @@ toolbarViewCss =
 .scope-editor-view .path > ul > li { display: inline-block; }
 .scope-editor-view .path:before { content: "path : " }
 .scope-editor-view .path-step:before { content: "step : " }
+
 """
 
+-- VIEW: toolbarPathEntry
+
+
+{-| toolbar path entry
+-}
+toolbarPathEntry : String -> List i -> Html (Msg s i)
+toolbarPathEntry i path =
+--    Css.div pathEntryClasses.main
+    div [ class "toolbar-path-entry" ]
+        [ infoRowBase "step" <| span [ onClick <| SetPath path ] [ text i ]
+        ]
+
+
+{-| CSS parts for toolbarPathEntry
+-}
+toolbarPathEntryCss : String
+toolbarPathEntryCss =
+    """
+.toolbar-path-entry { display: inline-block; line-height: 1.4em; padding: 0.3em 1em;  border-radius: 2em; border-right: 4px solid; cursor:pointer; }
+.toolbar-path-entry:hover { text-decoration:underline; }
+"""
 
 
 -- VIEW: toolButtonsView
@@ -85,7 +107,8 @@ toolbarViewCss =
 -}
 toolButtonsView : Model k s i d -> Html (Msg s i)
 toolButtonsView model =
-    div [ class "tool-buttons-view" ]
+--    Css.div toolButtonsViewClasses.main
+    div [class "tool-buttons-view"]
         [ btn Up "Up"
         , btn Down "Down"
         , btn Left "<- Left"
@@ -101,14 +124,14 @@ toolButtonsView model =
                 btn (OpAppend (model.traits.empty k)) <| "Append " ++ toString k
             )
             |> span []
---        , btn (OpAppend ) "Insert Key"
         ]
 
 
 btn : msg -> String -> Html msg
 btn msg label =
     Html.button
-        [ class "btn toolbar-btn"
+--        [ Css.toHtmlClass toolButtonsViewClasses.button
+        [ class "toolbar-btn"
         , onClick msg]
         [ text label ]
 
@@ -119,33 +142,6 @@ toolButtonsViewCss = """
 .tool-buttons-view .toolbar-btn {}
 
 """
-
-
-
-
-
-
--- VIEW: toolbarPathEntry
-
-
-{-| toolbar path entry
--}
-toolbarPathEntry : String -> List i -> Html (Msg s i)
-toolbarPathEntry i path =
-    div [ class "toolbar-path-entry" ]
-        [ infoRowBase "step" <| span [ onClick <| SetPath path ] [ text i ]
-        ]
-
-
-{-| CSS parts for toolbarPathEntry
--}
-toolbarPathEntryCss : String
-toolbarPathEntryCss =
-    """
-.toolbar-path-entry { display: inline-block; line-height: 1.4em; padding: 0.3em 1em;  border-radius: 2em; border-right: 4px solid; cursor:pointer; }
-.toolbar-path-entry:hover { text-decoration:underline; }
-"""
-
 
 
 -- VIEW: operationsView
@@ -169,6 +165,33 @@ operationsViewCss =
     """
 .operations-view {  }
 """
+
+
+
+-- VIEW: stringScopeEditorView
+
+
+
+{-| string scope editor view
+-}
+stringScopeEditorView : ScopeTraits k s i d -> s -> Html (Msg s i)
+stringScopeEditorView traits scope =
+    case traits.base of
+        Scopes.StringScope ->
+            div [ class "string-scope-editor-view" ]
+                [ Html.input [type_ "text", value <| toString scope] []
+                ]
+        _ -> text ""
+
+
+{-| CSS parts for stringScopeEditorView
+-}
+stringScopeEditorViewCss : String
+stringScopeEditorViewCss = """
+.string-scope-editor-view input { font-size:19px;  }
+"""
+
+
 
 
 
@@ -326,6 +349,7 @@ css =
 --    Helpers.CssBit.templateWith ()
     String.join "\n"
         [ toolbarViewCss
+        , stringScopeEditorViewCss
         , toolButtonsViewCss
         , toolbarPathEntryCss
         , operationsViewCss

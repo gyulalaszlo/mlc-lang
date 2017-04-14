@@ -11,13 +11,9 @@ templateWith : Dict String String -> String -> String
 templateWith params =
     Regex.replace Regex.All (Regex.regex <| "\\{\\{(.*)\\}\\}")
         (\{submatches, match} ->
-            submatches
-                |> List.head
-                |> Debug.log "ASDAS"
-                |> Maybe.andThen (\key -> key)
+            List.head submatches
                 |> Maybe.andThen (\key -> Dict.get key params)
-                |> Maybe.withDefault match
-                )
+                |> Maybe.withDefault match)
 
 
 
