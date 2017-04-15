@@ -19,4 +19,6 @@ type Msg scope key
     | OpRemove
     | OpAppend scope
 
+    | OpSetString String
+
 

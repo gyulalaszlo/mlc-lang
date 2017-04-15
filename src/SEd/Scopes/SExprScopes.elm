@@ -70,7 +70,7 @@ keyTraits =
     { leafScopeTraits
         | base = StringScope
             { toString = recursiveToData
-            , fromString = Just << EKey
+            , fromString = Ok << EKey
             }
         , toData = Just << recursiveToData
         , toLabel = listLabel

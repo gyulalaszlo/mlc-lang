@@ -10,13 +10,15 @@ import Css.Border
 import Css.Font
 import Css.Rectangle
 import Css.Size exposing (em)
+import Error exposing (Error)
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class, type_, value)
 import Html.Events exposing (onClick)
 import List.Extra
 import SEd.Scopes as Scopes exposing (BasicScope(ListScope), ScopeLikeTraits, ScopeTraits, scopeTraitsFor)
-import SEd.Scopes.Model exposing (Model,  currentScope, scopeAndTraitsForPath)
+import SEd.Scopes.Model exposing (Model, currentScope, scopeAndTraitsForPath)
 import SEd.Scopes.Msg exposing (Msg(..))
+import SEd.Scopes.SExprView
 
 
 -- VIEW: toolbarView
@@ -30,29 +32,28 @@ toolbarView model =
         scope =
             currentScope model
 
-        pathListFoldStep localKey (pathBuffer, pathBitsDone) =
+        orNothing =
+            Maybe.withDefault (text "")
+
+        pathListFoldStep localKey ( pathBuffer, pathBitsDone ) =
             let
                 thisStepPath =
                     pathBuffer ++ [ localKey ]
             in
                 ( thisStepPath, pathBitsDone ++ [ ( toString localKey, thisStepPath ) ] )
 
-
         pathList =
             Scopes.mapPath model.traits (\i ts s -> Ok <| ts.toLabel s) model.path model.data
                 |> Result.withDefault []
-                |> List.map2 (\path l -> (l, path)) (List.Extra.inits model.path)
-
+                |> List.map2 (\path l -> ( l, path )) (List.Extra.inits model.path)
+                |> List.append [ ( "root", [] ) ]
     in
-        div [class "toolbar-view"]
-            [ div [class "path"]
-                [ htmlList (\( i, p ) -> toolbarPathEntry i p) <|
-                    (("root", []) :: pathList)
-                ]
+        div [ class "toolbar-view" ]
+            [ pathList
+                |> List.map (\( i, p ) -> toolbarPathEntry i p)
+                |> Html.nav [ class "path" ]
             , toolButtonsView model
-            , case scope of
-                Nothing -> text ""
-                Just s -> stringScopeEditorView (scopeTraitsFor model.traits s) s
+            , specializedScopeEditors model.traits model.path model.data
             ]
 
 
@@ -77,6 +78,8 @@ toolbarViewCss =
 
 """
 
+
+
 -- VIEW: toolbarPathEntry
 
 
@@ -84,10 +87,11 @@ toolbarViewCss =
 -}
 toolbarPathEntry : String -> List i -> Html (Msg s i)
 toolbarPathEntry i path =
---    Css.div pathEntryClasses.main
-    div [ class "toolbar-path-entry" ]
-        [ infoRowBase "step" <| span [ onClick <| SetPath path ] [ text i ]
+    span
+        [ class "toolbar-path-entry"
+        , onClick <| SetPath path
         ]
+        [ text i ]
 
 
 {-| CSS parts for toolbarPathEntry
@@ -100,34 +104,21 @@ toolbarPathEntryCss =
 """
 
 
--- VIEW: toolButtonsView
 
+-- VIEW: toolButtonsView
 
 
 {-| tool buttons view
 -}
 toolButtonsView : Model k s i d -> Html (Msg s i)
 toolButtonsView model =
---    Css.div toolButtonsViewClasses.main
-    div [class "tool-buttons-view"]
+    div [ class "tool-buttons-view" ]
         [ btn Up "Up"
         , btn Down "Down"
         , btn Left "<- Left"
         , btn Right "Right -> "
         , text " .. "
         , btn OpRemove "REMOVE !="
-
-        , scopeAndTraitsForPath model.path model
-            |> Maybe.andThen (\(s,traits)->
-                case traits.base of
-                    ListScope listTraits -> Just <| listTraits.appendableTypes s
-                    _ -> Nothing)
-            |> Maybe.withDefault []
-            |> List.map (\k ->
-
-                btn (OpAppend (model.traits.empty k)) <| "Append " ++ toString k
-            )
-            |> span []
         ]
 
 
@@ -135,237 +126,130 @@ btn : msg -> String -> Html msg
 btn msg label =
     Html.button
         [ class "toolbar-btn"
-        , onClick msg]
+        , onClick msg
+        ]
         [ text label ]
+
 
 {-| CSS parts for toolButtonsView
 -}
 toolButtonsViewCss : String
-toolButtonsViewCss = """
+toolButtonsViewCss =
+    """
 .tool-buttons-view .toolbar-btn {}
 
 """
 
 
--- VIEW: operationsView
+
+-- SCOPE SPECIAL EDITORS -------------------------------------------------------
+
+-- VIEW: specializedScopeEditors
 
 
-{-| operations view
+{-| specialized scope editors
 -}
---operationsView : BasicOperation -> List k -> Html (Msg s i)
-operationsView op scopes =
-    div [ class "operations-view" ]
-        [ span [ class "operation-name" ] [ text <| toString op ]
-        , Html.ul [] <|
-            List.map (\scopeType -> Html.li [] [ text <| toString scopeType ]) scopes
-        ]
+specializedScopeEditors : ScopeLikeTraits k s i d -> Scopes.Path i -> s -> Html (Msg s i)
+specializedScopeEditors traits path s =
+    case Scopes.recursiveChildScopeAndTraitsAt traits path s of
+        Err err ->
+            div [ class "scope-error" ]
+                [ text <| "Cannot find scope: " ++ Error.errorToString err ]
+
+        Ok ( ts, s ) ->
+            [ listScopeAppendEditorView, stringScopeEditorView ]
+                |> List.map (\fn -> fn traits ts s)
+                |> div [ class "specialized-scope-editors" ]
 
 
-{-| CSS parts for operationsView
+{-| CSS parts for specializedScopeEditors
 -}
-operationsViewCss : String
-operationsViewCss =
+specializedScopeEditorsCss : String
+specializedScopeEditorsCss =
     """
-.operations-view {  }
+.specialized-scope-editors { padding: 1em;  }
+
+.specialized-scope-editors,
+.specialized-scope-editors input { font-size:19px;  }
 """
+        ++ stringScopeEditorViewCss
+        ++ listScopeAppendEditorViewCss
 
 
 
 -- VIEW: stringScopeEditorView
 
 
-
 {-| string scope editor view
 -}
-stringScopeEditorView : ScopeTraits k s i d -> s -> Html (Msg s i)
-stringScopeEditorView traits scope =
+stringScopeEditorView : ScopeLikeTraits k s i d -> ScopeTraits k s i d -> s -> Html (Msg s i)
+stringScopeEditorView globalTraits traits scope =
     case traits.base of
         Scopes.StringScope ts ->
             div [ class "string-scope-editor-view" ]
-                [ Html.input [type_ "text", value <| ts.toString scope] []
+                [ Html.input
+                    [ type_ "text", value <| ts.toString scope
+                    , Html.Events.onInput <| OpSetString
+                    ] []
                 ]
-        _ -> text ""
+
+        _ ->
+            text ""
 
 
 {-| CSS parts for stringScopeEditorView
 -}
 stringScopeEditorViewCss : String
-stringScopeEditorViewCss = """
-.string-scope-editor-view input { font-size:19px;  }
-"""
-
-
-
-
-
--- HELPERS
-
-
-infoRowBase : String -> Html msg -> Html msg
-infoRowBase k s =
-    span [ class k, class "info-row" ] [ s ]
-
-
-infoRow : String -> String -> Html msg
-infoRow k s =
-    infoRowBase k <| text s
-
-
-htmlList fn es =
-    Html.ul [] <|
-        List.map (\e -> Html.li [] [ fn e ]) es
-
-
-
--- VIEW: sExpressionView
-
-
-{-| s expression view
--}
-sExpressionView : ScopeLikeTraits k s i d -> s -> Html (Msg s i)
-sExpressionView scopeTraits scope =
-    let
-        kind =
-            scopeTraits.kindOf scope
-
-        traits =
-            scopeTraits.traitsFor kind
-
-        childRange =
-            case traits.base of
-                ListScope listTraits -> listTraits.childKeys scope
-                _ -> Nothing
-    in
-        div [ class "s-expr-view" ]
-            [ infoRow "kind" <| toString kind
-            , infoRow "base" <| toString traits.base
-            , traits.toData scope
-                |> Maybe.map (infoRow "data" << toString)
-                |> Maybe.withDefault (text "")
-            , childRange
-                |> Maybe.map (htmlList (\i -> childKindAndDataView traits i scope))
-                |> Maybe.withDefault (text "")
-            ]
-
-
-{-| CSS parts for sExpressionView
--}
-sExpressionViewCss : String
-sExpressionViewCss =
+stringScopeEditorViewCss =
     """
-.s-expr-view { border: 1px solid; padding: 0.2em; }
-
-.s-expr-view { font-family: "Fira Code", Monaco, Consolas, Courer New; font-size: 0.8em; whitespace: pre-wrap; }
-
-.s-expr-view .info-row { display: block; }
-
-.s-expr-view .kind { font-weight: bold;  }
-.s-expr-view .data { font-size: 150%; padding: 1em; border:2px dotted;  }
-
-.s-expr-view .kind:before { content: "kind .. " }
-.s-expr-view .with:before { content: "with .. " }
-/* .s-expr-view .data:before { content: "data .. " } */
-.s-expr-view .base:before { content: "base .. " }
+.string-scope-editor-view input {}
 """
 
 
 
--- VIEW: childKindAndDataView
+-- VIEW: listScopeAppendEditorView
 
 
-{-| child kind and data view
+{-| Shows the possible append options for the currently selected scope
 -}
-childKindAndDataView : ScopeTraits k s i d -> i -> s -> Html (Msg s i)
-childKindAndDataView traits i scope =
-    div [ class "child-kind-and-data-view" ] <|
-        case traits.base of
+listScopeAppendEditorView : ScopeLikeTraits k s i d -> ScopeTraits k s i d -> s -> Html (Msg s i)
+listScopeAppendEditorView traits localTraits s =
+    case Scopes.appendableTypes traits s of
+        Err err ->
+            text ""
 
-            ListScope lTraits ->
+        Ok ks ->
+            ks
+                |> List.map (\k -> appendButton traits (toString k) k)
+                |> span []
 
-                [ Html.button [ class "idx", onClick (AddPath i) ] [ text <| toString i ]
-                , lTraits.childScopeAt i scope
-                    |> Maybe.map childDataView
-                    |> Maybe.withDefault (text "nada")
-                    |> (\content -> div [ onClick (AddPath i) ] [ content ] )
 
-                , lTraits.childKindsAt i scope
-                    |> Maybe.map (htmlList (\k -> childKindView k scope))
-                    |> Maybe.map (infoRowBase "opts")
-                    |> Maybe.withDefault (text "")
-                ]
-
-            _ -> []
-
-{-| CSS parts for childKindAndDataView
+{-| a button for appending a new scope to the end of the current
 -}
-childKindAndDataViewCss : String
-childKindAndDataViewCss =
-    """
-.child-kind-and-data-view {  }
-.child-kind-and-data-view .data { cursor:pointer; }
-.child-kind-and-data-view .data:hover { text-decoration: underline; }
-.child-kind-and-data-view .idx { cursor: pointer; text-decoration: underline; }
-.child-kind-and-data-view .idx:before { content: "#"; }
-.child-kind-and-data-view .opts:before { content: "opts : "; }
-"""
-
-
-
--- VIEW: childDataKind
-
-
-{-| child kind views
--}
-childKindView : k -> s -> Html (Msg s i)
-childKindView scopeType scope =
-    Html.li [ class "child-kind-views" ]
-        [ infoRow "kind" <| toString scopeType
+appendButton : ScopeLikeTraits k s i d -> String -> k -> Html (Msg s i)
+appendButton traits label k =
+    Html.button
+        [ onClick (OpAppend (traits.empty k)) ]
+        [ text <| "Append " ++ label
         ]
 
 
-{-| CSS parts for childKindViews
+{-| CSS parts for listScopeAppendEditorView
 -}
-childKindViewsCss : String
-childKindViewsCss =
+listScopeAppendEditorViewCss : String
+listScopeAppendEditorViewCss =
     """
-.child-kind-views {  }
-.child-kind-views .short-name:before { content: "from ~> " }
-"""
-
-
-
--- VIEW: childDataView
-
-
-{-| child data view
--}
-childDataView : d -> Html (Msg s i)
-childDataView data =
-    div [ class "child-data-view" ]
-        [ infoRow "data" <| toString data
-        ]
-
-
-{-| CSS parts for childDataView
--}
-childDataViewCss : String
-childDataViewCss =
-    """
-.child-data-view {  }
+.list-scope-append-editor-view {  }
 """
 
 
 css : String
 css =
---    Helpers.CssBit.templateWith ()
     String.join "\n"
         [ toolbarViewCss
         , stringScopeEditorViewCss
         , toolButtonsViewCss
         , toolbarPathEntryCss
-        , operationsViewCss
-        , sExpressionViewCss
-        , childDataViewCss
-        , childKindViewsCss
-        , childKindAndDataViewCss
+        , specializedScopeEditorsCss
+        , SEd.Scopes.SExprView.css
         ]

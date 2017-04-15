@@ -26,6 +26,7 @@ import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import List.Extra
 import Regex
+import SEd.Scopes.SExprView
 import Task
 import SEd.Scopes as Scopes exposing (BasicScope(ListScope, StringScope), OpResult, Path, ScopeTraits, scopeTraitsFor)
 import SEd.Scopes.Model as Model exposing (sExprAt, scopeAndTraitsForPath)
@@ -72,19 +73,8 @@ update msg model =
         updateData newData =
             ({ model | data = newData }, Cmd.none)
 
-        fromOpResult res =
-            case res of
-                Ok {cursor, new} ->
-                        ({ model | data = new, path = cursor }, Cmd.none)
-                Err err ->
-                        ({ model | errors = err :: model.errors }, Cmd.none)
-        fromCursorResult res =
-            case res of
-                Ok cs -> ({ model | path = cs }, Cmd.none)
-                Err err -> ({ model | errors = err :: model.errors}, Cmd.none)
-
-        fromResult res =
-                Result.map (\p -> ({model | path = p }, Cmd.none)) res
+        fromOpResult res = updateFromOpResult model res
+        fromCursorResult res = updateFromCursorResult model res
 
     in
         case msg of
@@ -96,9 +86,8 @@ update msg model =
                 { model | path = is } ! []
 
             Up ->
-                List.Extra.init model.path
-                    |> Maybe.map (\p -> { model | path = p } ! [])
-                    |> orNothing
+                Scopes.stepUp model.path
+                    |> fromCursorResult
 
             Down ->
                 Scopes.stepDown model.traits model.path model.data
@@ -120,10 +109,30 @@ update msg model =
                 Scopes.recursiveAppend model.traits model.path scope model.data
                     |> fromOpResult
 
+            OpSetString str ->
+                Scopes.recursiveSetString model.traits str model.path model.data
+                    |> fromOpResult
+
+
+{-| update for messages that mutate the scope tree and return an OpResult
+-}
+updateFromOpResult : Model k s i d -> OpResult s i -> (Model k s i d, Cmd (Msg s i))
+updateFromOpResult model res =
+    case res of
+        Ok {cursor, new} ->
+                ({ model | data = new, path = cursor }, Cmd.none)
+        Err err ->
+                ({ model | errors = err :: model.errors }, Cmd.none)
 
 
 
-
+{-| update for messages that mutate the cursor tree and return a Result Error (Path i)
+-}
+updateFromCursorResult : Model k s i d -> Result Error (Path i) -> (Model k s i d, Cmd (Msg s i))
+updateFromCursorResult model res =
+    case res of
+        Ok cs -> ({ model | path = cs }, Cmd.none)
+        Err err -> ({ model | errors = err :: model.errors}, Cmd.none)
 
 
 -- VIEW: view
@@ -136,7 +145,7 @@ view model =
     div [class "scope-editor-view" ]
         [ Views.toolbarView model
         , sExprAt model.traits model.path model.data
-            |> Maybe.map (Views.sExpressionView model.traits)
+            |> Maybe.map (SEd.Scopes.SExprView.view model.traits)
             |> Maybe.withDefault (text "Cannot find SExpr at path")
 
         , div [] <| List.map (text << toString) model.errors

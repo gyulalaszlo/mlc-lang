@@ -7,8 +7,9 @@ module SEd.Scopes exposing
     , StringScopeTraits
     , ListScopeTraits
 
-    , listScopeFor, childKeys, childScopeAt, childScopeAndTraitsAt
-    , stepLeft, stepRight, stepDown, stepIntoNth
+    , listScopeFor, childKeys
+    , childScopeAt, childScopeAndTraitsAt, recursiveChildScopeAndTraitsAt
+    , stepLeft, stepRight, stepUp, stepDown, stepIntoNth
 
     , OpResult, OpSuccess
     , opOk
@@ -19,7 +20,8 @@ module SEd.Scopes exposing
     , scopeTraitsFor,  replace, update, append, remove
     , reducePath, mapPath
 
-    , recursiveAppend, recursiveRemove
+    , appendableTypes
+    , recursiveAppend, recursiveRemove, recursiveSetString
     )
 
 {-| Describe me please...
@@ -101,7 +103,7 @@ type alias ScopeTraits scopeKey scope childKey data =
 -}
 type alias StringScopeTraits scope =
     { toString : scope -> String
-    , fromString : String -> Maybe scope
+    , fromString : String -> Result Error scope
     }
 
 {-| List scope
@@ -129,7 +131,7 @@ leafScopeTraits =
     , toLabel = toString
     , base = StringScope
         { toString = toString
-        , fromString = always Nothing
+        , fromString = always (Error.err "No setString() implementation defined")
         }
 --    , steps = {}
     }
@@ -154,24 +156,62 @@ scopeTraitsFor : ScopeLikeTraits k s i d -> s -> ScopeTraits k s i d
 scopeTraitsFor traits scope =
     traits.traitsFor <| traits.kindOf scope
 
+-- STRING SCOPES ---------------------------------------------------------------
+
+setString : ScopeLikeTraits k s i d -> String -> s -> OpResult s i
+setString traits str s =
+    let scopeTraits = scopeTraitsFor traits s
+    in case scopeTraits.base of
+        StringScope ts ->
+            ts.fromString str
+                |> Result.map (\ss -> { cursor = [], new = ss })
+        _ ->
+            Error.errMsg ["Cannot setString for non-string scope"
+            , toString s ]
 
 
+recursiveSetString : ScopeLikeTraits k s i d -> String -> Path i -> s -> OpResult s i
+recursiveSetString traits str path s =
+    case path of
+        [] -> setString traits str s
+        i :: is -> update traits i (recursiveSetString traits str is) s
+
+-- LIST SCOPES -----------------------------------------------------------------
+
+
+{-| Wraps ListScopeTraits.replace
+-}
 replace : ScopeLikeTraits k s i d -> i -> s -> s -> OpResult s i
 replace traits i new s =
     listScopeFor traits s
         |> Result.andThen (\listTraits -> listTraits.replace i new s)
 
 
+{-| Wraps ListScopeTraits.append
+-}
 append : ScopeLikeTraits k s i d -> s -> s -> OpResult s i
 append traits new s =
     listScopeFor traits s
         |> Result.andThen (\listTraits -> listTraits.append new s)
 
+
+{-| Wraps ListScopeTraits.appendableTypes
+-}
+appendableTypes : ScopeLikeTraits k s i d -> s -> Result Error (List k)
+appendableTypes traits s =
+    listScopeFor traits s
+        |> Result.map (\listTraits -> listTraits.appendableTypes s)
+
+
+{-| Wraps ListScopeTraits.remove
+-}
 remove : ScopeLikeTraits k s i d -> i -> s -> OpResult s i
 remove traits i s =
     listScopeFor traits s
         |> Result.andThen (\listTraits -> listTraits.remove i s)
 
+{-| Recursive update wrapper.
+-}
 update : ScopeLikeTraits k s i d -> i -> (s -> OpResult s i) -> s -> OpResult s i
 update traits i fn s =
     let ts = scopeTraitsFor traits s
@@ -208,6 +248,9 @@ recursiveRemove traits path s =
 -- SCOPE QUICK ACCESS ----------------------------------------------------------
 
 
+{-| Returns the list scope traits for the current scope or Error if the current scope
+is not a list scope
+-}
 listScopeFor : ScopeLikeTraits k s i d -> s -> Result Error (ListScopeTraits k s i)
 listScopeFor traits s =
     let ts = scopeTraitsFor traits s
@@ -242,9 +285,31 @@ childKeys traits s =
             ts.childKeys s |> Result.fromMaybe (err s))
 
 
+{-| Returns a child scope by path
+-}
+recursiveChildScopeAt : ScopeLikeTraits k s i d -> Path i -> s -> Result Error s
+recursiveChildScopeAt traits path s =
+    case path of
+        [] -> Ok s
+        i :: is ->
+            childScopeAt traits i s
+                |> Result.andThen (recursiveChildScopeAt traits is)
+
+
+{-| Returns a child scope and its traits by path
+-}
+recursiveChildScopeAndTraitsAt : ScopeLikeTraits k s i d -> Path i -> s -> Result Error (ScopeTraits k s i d, s)
+recursiveChildScopeAndTraitsAt traits path s =
+    case path of
+        [] -> Ok (scopeTraitsFor traits s, s)
+        i :: is ->
+            childScopeAt traits i s
+                |> Result.andThen (recursiveChildScopeAndTraitsAt traits is)
+
 -- STEPS -----------------------------------------------------------------------
 
-
+{-| Base implementation for remapping a cursor position in the childKeys list of a path
+-}
 stepLR : ScopeLikeTraits k s i d -> (Int -> Int) -> Path i -> s -> Result Error (Path i)
 stepLR traits keyModFn path s =
     case path of
@@ -270,7 +335,12 @@ stepRight traits path s =
     stepLR traits (\i -> i + 1) path s
 
 
-
+stepUp : Path i -> Result Error (Path i)
+stepUp path =
+    case path of
+        [] -> Error.err "Cannot step up in empty path, it already points to root."
+        [i] -> Ok [i]
+        i :: is -> stepUp is |> Result.map (\newPath -> i :: newPath)
 
 stepDown : ScopeLikeTraits k s i d -> Path i -> s -> Result Error (Path i)
 stepDown traits path s =
@@ -282,6 +352,9 @@ stepDown traits path s =
                 |> Result.map (\ps -> i :: ps)
 
 
+{-| Tries to step down into the i-th child of the scope. Returns the new path or Error
+if an error occurred.
+-}
 stepIntoNth : ScopeLikeTraits k s i d -> Path i -> i -> s -> Result Error (Path i)
 stepIntoNth traits path i s =
     case path of
@@ -303,18 +376,12 @@ reducePath traits fn init path s =
                 |> Result.andThen (\(ts,ss) -> fn i ts ss init |> Result.map (\v -> (v, ss)))
                 |> Result.andThen (\(aa,ss) -> reducePath traits fn aa is ss)
 
+{-| Steps through the path and returns the OK with a list with the return values for each
+iteration, or an Error if any errors occurred along the way
+-}
 mapPath : ScopeLikeTraits k s i d -> (i -> ScopeTraits k s i d -> s -> Result Error a) -> Path i -> s -> Result Error (List a)
 mapPath traits fn path s =
     reducePath traits
-        (\i ts s ss ->
-            Result.map (\v -> ss ++ [v]) (fn i ts s)
-            )
+        (\i ts s ss -> (fn i ts s) |> Result.map (\v -> ss ++ [v]))
        []
        path s
---    case path of
---        [] -> Ok init
---        i :: is ->
---            childScopeAndTraitsAt traits i s
---                |> Result.andThen (\(ts,ss) -> fn i ts ss init |> Result.map (\v -> (v, ss)))
---                |> Result.andThen (\(aa,ss) -> reducePath traits fn aa is ss)
-
