@@ -339,8 +339,10 @@ stepUp : Path i -> Result Error (Path i)
 stepUp path =
     case path of
         [] -> Error.err "Cannot step up in empty path, it already points to root."
-        [i] -> Ok [i]
+        [i] -> Ok []
         i :: is -> stepUp is |> Result.map (\newPath -> i :: newPath)
+
+
 
 stepDown : ScopeLikeTraits k s i d -> Path i -> s -> Result Error (Path i)
 stepDown traits path s =

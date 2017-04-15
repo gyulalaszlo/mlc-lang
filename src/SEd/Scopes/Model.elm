@@ -4,8 +4,9 @@ module SEd.Scopes.Model exposing (..)
 -}
 
 import Error exposing (Error)
+import SEd.ErrorView
 import SEd.Scopes exposing (BasicScope(..), OpResult, OpSuccess, ScopeLikeTraits, ScopeTraits)
-import SEd.Scopes.Msg exposing (Msg)
+import SEd.Scopes.Msg exposing (Msg(SEdErrorViewMsg))
 
 
 -- MODEL
@@ -17,7 +18,7 @@ type alias Model kind scope childKey data =
     , path :
         List childKey
         --(kind, childKey)
-    , errors : List Error
+    , errors : SEd.ErrorView.Model
     , traits : ScopeLikeTraits kind scope childKey data
     }
 
@@ -26,7 +27,7 @@ from : ScopeLikeTraits k s i d -> s -> Model k s i d
 from traits scope =
     { data = scope
     , path = []
-    , errors = []
+    , errors = SEd.ErrorView.initialModel
     , traits = traits
     }
 
@@ -76,4 +77,6 @@ sExprAt scopeTraits path scope =
 
 subscriptions : Model k s i d -> Sub (Msg s i)
 subscriptions model =
-    Sub.none
+    Sub.batch
+        [ Sub.map SEdErrorViewMsg <| SEd.ErrorView.subscriptions model.errors
+        ]

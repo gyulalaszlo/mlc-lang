@@ -26,6 +26,7 @@ import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import List.Extra
 import Regex
+import SEd.ErrorView
 import SEd.Scopes.SExprView
 import Task
 import SEd.Scopes as Scopes exposing (BasicScope(ListScope, StringScope), OpResult, Path, ScopeTraits, scopeTraitsFor)
@@ -113,6 +114,10 @@ update msg model =
                 Scopes.recursiveSetString model.traits str model.path model.data
                     |> fromOpResult
 
+            SEdErrorViewMsg m
+                -> updateSEdErrorView m model
+
+
 
 {-| update for messages that mutate the scope tree and return an OpResult
 -}
@@ -122,7 +127,7 @@ updateFromOpResult model res =
         Ok {cursor, new} ->
                 ({ model | data = new, path = cursor }, Cmd.none)
         Err err ->
-                ({ model | errors = err :: model.errors }, Cmd.none)
+                ({ model | errors = SEd.ErrorView.insert err model.errors }, Cmd.none)
 
 
 
@@ -132,7 +137,20 @@ updateFromCursorResult : Model k s i d -> Result Error (Path i) -> (Model k s i 
 updateFromCursorResult model res =
     case res of
         Ok cs -> ({ model | path = cs }, Cmd.none)
-        Err err -> ({ model | errors = err :: model.errors}, Cmd.none)
+        Err err -> ({ model | errors = SEd.ErrorView.insert err model.errors }, Cmd.none)
+
+
+
+{-| Updates sub component: SEd.ErrorView
+-}
+updateSEdErrorView : SEd.ErrorView.Msg -> Model k s i d -> (Model k s i d, Cmd (Msg s i))
+updateSEdErrorView m model =
+    let
+        (sm, sc) = SEd.ErrorView.update m model.errors
+    in
+        ({ model | errors = sm }, Cmd.map SEdErrorViewMsg sc)
+
+
 
 
 -- VIEW: view
@@ -148,7 +166,7 @@ view model =
             |> Maybe.map (SEd.Scopes.SExprView.view model.traits)
             |> Maybe.withDefault (text "Cannot find SExpr at path")
 
-        , div [] <| List.map (text << toString) model.errors
+        , Html.map SEdErrorViewMsg <| SEd.ErrorView.view model.errors
         ]
 
 
@@ -168,4 +186,5 @@ css =
     String.join "\n\n"
         [ viewCss
         , Views.css
+        , SEd.ErrorView.css
         ]

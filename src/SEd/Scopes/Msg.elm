@@ -1,6 +1,10 @@
 module SEd.Scopes.Msg exposing (..)
+
 {-| Messages for the scope editor
 -}
+
+import SEd.ErrorView
+
 
 -- MSG
 
@@ -15,10 +19,11 @@ type Msg scope key
     | Down
     | Left
     | Right
-
     | OpRemove
     | OpAppend scope
-
     | OpSetString String
+    | SEdErrorViewMsg SEd.ErrorView.Msg
+
+
 
 
