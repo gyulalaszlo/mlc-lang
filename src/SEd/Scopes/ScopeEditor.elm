@@ -20,14 +20,14 @@ import Css.Rectangle
 import Css.Selector
 import Css.Size
 import Dict exposing (Dict)
-import Error
+import Error exposing (Error)
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import List.Extra
 import Regex
 import Task
-import SEd.Scopes as Scopes exposing (OpResult, Path, ScopeTraits, scopeTraitsFor)
+import SEd.Scopes as Scopes exposing (BasicScope(ListScope, StringScope), OpResult, Path, ScopeTraits, scopeTraitsFor)
 import SEd.Scopes.Model as Model exposing (sExprAt, scopeAndTraitsForPath)
 import SEd.Scopes.Msg exposing (Msg(..))
 import SEd.Scopes.Views as Views
@@ -78,11 +78,19 @@ update msg model =
                         ({ model | data = new, path = cursor }, Cmd.none)
                 Err err ->
                         ({ model | errors = err :: model.errors }, Cmd.none)
+        fromCursorResult res =
+            case res of
+                Ok cs -> ({ model | path = cs }, Cmd.none)
+                Err err -> ({ model | errors = err :: model.errors}, Cmd.none)
+
+        fromResult res =
+                Result.map (\p -> ({model | path = p }, Cmd.none)) res
 
     in
         case msg of
             AddPath i ->
-                { model | path = model.path ++ [ i ] } ! []
+                Scopes.stepIntoNth model.traits model.path i model.data
+                    |> fromCursorResult
 
             SetPath is ->
                 { model | path = is } ! []
@@ -93,99 +101,29 @@ update msg model =
                     |> orNothing
 
             Down ->
-                stepDown model |> orNothing
+                Scopes.stepDown model.traits model.path model.data
+                    |> fromCursorResult
 
             Left ->
-                updateStep .stepLeft model |> orNothing
+                Scopes.stepLeft model.traits model.path model.data
+                    |> fromCursorResult
 
             Right ->
-                updateStep .stepRight model |> orNothing
+                Scopes.stepRight model.traits model.path model.data
+                    |> fromCursorResult
 
             OpRemove ->
-                doRemove model.traits model.path model.data
+                Scopes.recursiveRemove model.traits model.path model.data
                     |> fromOpResult
---                updateWithOp
---                    (\traits i s -> traits.remove i s) model
---                    |> orNothing
 
             OpAppend scope ->
-                doAppend model.traits model.path scope model.data
+                Scopes.recursiveAppend model.traits model.path scope model.data
                     |> fromOpResult
 
 
 
--- APPEND ----------------------------------------------------------------------
-
-doAppend : ScopeLikeTraits k s i d -> Path i -> s -> s -> OpResult s i
-doAppend traits path new s =
-    case path of
-        [] -> Scopes.append traits new s
-        i :: is -> Scopes.update traits i (doAppend traits is new) s
 
 
--- REMOVE ----------------------------------------------------------------------
-
-doRemove : ScopeLikeTraits k s i d -> Path i -> s -> OpResult s i
-doRemove traits path s =
-    case path of
-        [] -> Error.err "Cannot remove the root"
-        [i] -> Scopes.remove traits i s
-        i :: is -> Scopes.update traits i (doRemove traits is) s
-
-{-| try to step into the current context
--}
-stepDown : Model k s i d -> Maybe ( Model k s i d, Cmd (Msg s i) )
-stepDown model =
-    scopeAndTraitsForPath model.path model
-        |> Maybe.andThen (\( current, traits ) -> traits.childKeys current)
-        |> Maybe.andThen List.head
-        |> Maybe.map (\head -> ( model, Task.perform AddPath (Task.succeed head) ))
-
-
-
-{-| try to step into the current context
--}
-updatePath :
-    (List i -> s -> ScopeTraits k s i d -> Maybe (List i))
-    -> List i
-    -> Model k s i d
-    -> Maybe ( Model k s i d, Cmd (Msg s i) )
-updatePath fn path model =
-    let
-        setPath : List i -> ( Model k s i d, Cmd (Msg s i) )
-        setPath newPath =
-            ( model, Task.perform SetPath (Task.succeed newPath) )
-    in
-        List.Extra.init path
-            |> Maybe.andThen (\path -> scopeAndTraitsForPath path model)
-            |> Maybe.andThen (\( current, traits ) -> fn path current traits)
-            |> Maybe.map setPath
-
-
-updateStep :
-    (ScopeTraits k s i d -> i -> s -> Maybe i)
-    -> Model k s i d
-    -> Maybe ( Model k s i d, Cmd (Msg s i) )
-updateStep stepFn model =
-    let
-        newPath ps =
-            Maybe.map (\i -> List.reverse (i :: ps))
-
-        updateInner i s traits =
-            case List.reverse i of
-                h :: ps ->
-                    stepFn traits h s |> (newPath ps)
-
-                _ ->
-                    Nothing
-    in
-        updatePath updateInner model.path model
-
-
-pathOrEmpty : Maybe i -> List i
-pathOrEmpty p =
-    Maybe.map (\l -> [l]) p
-        |> Maybe.withDefault []
 
 
 -- VIEW: view
@@ -201,6 +139,7 @@ view model =
             |> Maybe.map (Views.sExpressionView model.traits)
             |> Maybe.withDefault (text "Cannot find SExpr at path")
 
+        , div [] <| List.map (text << toString) model.errors
         ]
 
 

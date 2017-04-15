@@ -13,7 +13,8 @@ import Css.Size exposing (em)
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class, type_, value)
 import Html.Events exposing (onClick)
-import SEd.Scopes as Scopes exposing (ScopeLikeTraits, ScopeTraits, scopeTraitsFor)
+import List.Extra
+import SEd.Scopes as Scopes exposing (BasicScope(ListScope), ScopeLikeTraits, ScopeTraits, scopeTraitsFor)
 import SEd.Scopes.Model exposing (Model,  currentScope, scopeAndTraitsForPath)
 import SEd.Scopes.Msg exposing (Msg(..))
 
@@ -36,14 +37,14 @@ toolbarView model =
             in
                 ( thisStepPath, pathBitsDone ++ [ ( toString localKey, thisStepPath ) ] )
 
+
         pathList =
-            List.foldl pathListFoldStep ( [], [] ) model.path
-                |> Tuple.second
+            Scopes.mapPath model.traits (\i ts s -> Ok <| ts.toLabel s) model.path model.data
+                |> Result.withDefault []
+                |> List.map2 (\path l -> (l, path)) (List.Extra.inits model.path)
 
     in
---        Css.div toolbarViewClasses.main
         div [class "toolbar-view"]
---            [ Css.div toolbarViewClasses.path
             [ div [class "path"]
                 [ htmlList (\( i, p ) -> toolbarPathEntry i p) <|
                     (("root", []) :: pathList)
@@ -94,7 +95,7 @@ toolbarPathEntry i path =
 toolbarPathEntryCss : String
 toolbarPathEntryCss =
     """
-.toolbar-path-entry { display: inline-block; line-height: 1.4em; padding: 0.3em 1em;  border-radius: 2em; border-right: 4px solid; cursor:pointer; }
+.toolbar-path-entry { display: inline-block; line-height: 1.4em; padding: 0.3em 1em;  border-radius: 2em; cursor:pointer; }
 .toolbar-path-entry:hover { text-decoration:underline; }
 """
 
@@ -117,7 +118,10 @@ toolButtonsView model =
         , btn OpRemove "REMOVE !="
 
         , scopeAndTraitsForPath model.path model
-            |> Maybe.map (\(s,traits)-> traits.appendableTypes s )
+            |> Maybe.andThen (\(s,traits)->
+                case traits.base of
+                    ListScope listTraits -> Just <| listTraits.appendableTypes s
+                    _ -> Nothing)
             |> Maybe.withDefault []
             |> List.map (\k ->
 
@@ -130,7 +134,6 @@ toolButtonsView model =
 btn : msg -> String -> Html msg
 btn msg label =
     Html.button
---        [ Css.toHtmlClass toolButtonsViewClasses.button
         [ class "toolbar-btn"
         , onClick msg]
         [ text label ]
@@ -177,9 +180,9 @@ operationsViewCss =
 stringScopeEditorView : ScopeTraits k s i d -> s -> Html (Msg s i)
 stringScopeEditorView traits scope =
     case traits.base of
-        Scopes.StringScope ->
+        Scopes.StringScope ts ->
             div [ class "string-scope-editor-view" ]
-                [ Html.input [type_ "text", value <| toString scope] []
+                [ Html.input [type_ "text", value <| ts.toString scope] []
                 ]
         _ -> text ""
 
@@ -229,7 +232,9 @@ sExpressionView scopeTraits scope =
             scopeTraits.traitsFor kind
 
         childRange =
-            traits.childKeys scope
+            case traits.base of
+                ListScope listTraits -> listTraits.childKeys scope
+                _ -> Nothing
     in
         div [ class "s-expr-view" ]
             [ infoRow "kind" <| toString kind
@@ -272,18 +277,24 @@ sExpressionViewCss =
 -}
 childKindAndDataView : ScopeTraits k s i d -> i -> s -> Html (Msg s i)
 childKindAndDataView traits i scope =
-    div [ class "child-kind-and-data-view" ]
-        [ Html.button [ class "idx", onClick (AddPath i) ] [ text <| toString i ]
-        , traits.childScopeAt i scope
-            |> Maybe.map childDataView
-            |> Maybe.withDefault (text "nada")
-            |> (\content -> div [ onClick (AddPath i) ] [ content ] )
-        , traits.childKindsAt i scope
-            |> Maybe.map (htmlList (\k -> childKindView k scope))
-            |> Maybe.map (infoRowBase "opts")
-            |> Maybe.withDefault (text "")
-        ]
+    div [ class "child-kind-and-data-view" ] <|
+        case traits.base of
 
+            ListScope lTraits ->
+
+                [ Html.button [ class "idx", onClick (AddPath i) ] [ text <| toString i ]
+                , lTraits.childScopeAt i scope
+                    |> Maybe.map childDataView
+                    |> Maybe.withDefault (text "nada")
+                    |> (\content -> div [ onClick (AddPath i) ] [ content ] )
+
+                , lTraits.childKindsAt i scope
+                    |> Maybe.map (htmlList (\k -> childKindView k scope))
+                    |> Maybe.map (infoRowBase "opts")
+                    |> Maybe.withDefault (text "")
+                ]
+
+            _ -> []
 
 {-| CSS parts for childKindAndDataView
 -}

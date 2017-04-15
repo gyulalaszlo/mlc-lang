@@ -4,27 +4,35 @@ module SEd.Scopes exposing
     , ScopeTraits
     , leafScopeTraits
 
+    , StringScopeTraits
+    , ListScopeTraits
+
+    , listScopeFor, childKeys, childScopeAt, childScopeAndTraitsAt
+    , stepLeft, stepRight, stepDown, stepIntoNth
+
     , OpResult, OpSuccess
     , opOk
     , opErr
 
 
     , ScopeLikeTraits
-    , scopeTraitsFor, replace, update, append, remove
+    , scopeTraitsFor,  replace, update, append, remove
+    , reducePath, mapPath
+
+    , recursiveAppend, recursiveRemove
     )
 
 {-| Describe me please...
 -}
 
 import Error exposing (Error)
+import List.Extra
 import Set
 
 
-type BasicScope
-    = StringScope
-    | IntScope
-    | RecordScope
-    | ListScope
+type BasicScope scopeKey scope childKey
+    = StringScope (StringScopeTraits scope)
+    | ListScope (ListScopeTraits scopeKey scope childKey)
 
 
 
@@ -65,64 +73,49 @@ opErr: Error -> OpResult scope childKey
 opErr e = Err e
 
 
+-- CURSOR ----------------------------------------------------------------------
+
+type Cursor childKey
+    = Leaf
+    | Child childKey (Cursor childKey)
+
+
+
 -- SCOPE TRAITS ----------------------------------------------------------------
 
 
 {-| All scopes need these traits
 -}
-type alias GenericScopeTraits scope data =
-    { fromData: (data -> scope)
-    , toData: (scope -> data)
+type alias ScopeTraits scopeKey scope childKey data =
+    { fromData: (data -> Maybe scope)
+    , toData: (scope -> Maybe data)
 
+    , toLabel: (scope -> String)
+
+    , base: BasicScope scopeKey scope childKey
     }
 
-{-| Scope traits for string-based scopes
+
+{-|
+} Scope traits for string-based scopes
 -}
 type alias StringScopeTraits scope =
     { toString : scope -> String
-    , fromString : String -> scope
+    , fromString : String -> Maybe scope
     }
 
 {-| List scope
 -}
-type alias ListScopeTraits scopeKey scope childKey data =
+type alias ListScopeTraits scopeKey scope childKey =
     { childKeys: scope -> Maybe (List childKey)
     , childKindsAt: childKey -> scope -> Maybe (PossibleScopes scopeKey)
-    , childDataAt: childKey -> scope -> Maybe data
     , childScopeAt: childKey -> scope -> Maybe scope
 
     , appendableTypes: scope -> List scopeKey
-    -- appends a new scope to the end of the target
     , append: scope -> scope -> OpResult scope childKey
-    -- replace a child of a scope with a new scope
     , replace: childKey -> scope -> scope -> OpResult scope childKey
-    -- remove a child from a scope by key
     , remove: childKey -> scope -> OpResult scope childKey
-    }
 
-
-
-{-| Groups behaviours for a scope
--}
-type alias ScopeTraits scopeKey scope childKey data =
-    { base: BasicScope
-    , toData: (scope -> Maybe data)
-
-    , childKeys: scope -> Maybe (List childKey)
-    , childKindsAt: childKey -> scope -> Maybe (PossibleScopes scopeKey)
-    , childDataAt: childKey -> scope -> Maybe data
-    , childScopeAt: childKey -> scope -> Maybe scope
-
-    , stepLeft: childKey -> scope -> Maybe childKey
-    , stepRight: childKey -> scope -> Maybe childKey
-
-    , appendableTypes: scope -> List scopeKey
-    -- appends a new scope to the end of the target
-    , append: scope -> scope -> OpResult scope childKey
-    -- replace a child of a scope with a new scope
-    , replace: childKey -> scope -> scope -> OpResult scope childKey
-    -- remove a child from a scope by key
-    , remove: childKey -> scope -> OpResult scope childKey
     }
 
 
@@ -131,24 +124,15 @@ nada _ _ = Nothing
 
 leafScopeTraits : ScopeTraits k s i d
 leafScopeTraits =
-    { base = StringScope
-    , toData = always Nothing
-
-    , childKeys = always Nothing
-    , childKindsAt = nada
-    , childDataAt = nada
-    , childScopeAt = nada
-
-    , stepLeft = nada
-    , stepRight = nada
-
---    , operateOnChildAt = (\_ _ _ -> Nothing)
-    , appendableTypes = always []
-    , append = (\_ _ -> Error.err "Append not defined for this node type.")
-    , replace = (\i new _ -> opOk [i] new)
-    , remove = (\_ _ -> Error.err "Remove not defined for this node type.")
+    { toData = always Nothing
+    , fromData = always Nothing
+    , toLabel = toString
+    , base = StringScope
+        { toString = toString
+        , fromString = always Nothing
+        }
+--    , steps = {}
     }
-
 
 -- SCOPE TREES -----------------------------------------------------------------
 
@@ -174,32 +158,163 @@ scopeTraitsFor traits scope =
 
 replace : ScopeLikeTraits k s i d -> i -> s -> s -> OpResult s i
 replace traits i new s =
-    let ts = scopeTraitsFor traits s
-    in ts.replace i new s
+    listScopeFor traits s
+        |> Result.andThen (\listTraits -> listTraits.replace i new s)
+
 
 append : ScopeLikeTraits k s i d -> s -> s -> OpResult s i
 append traits new s =
-    let ts = scopeTraitsFor traits s
-    in ts.append new s
+    listScopeFor traits s
+        |> Result.andThen (\listTraits -> listTraits.append new s)
 
 remove : ScopeLikeTraits k s i d -> i -> s -> OpResult s i
 remove traits i s =
-    let ts = scopeTraitsFor traits s
-    in ts.remove i s
+    listScopeFor traits s
+        |> Result.andThen (\listTraits -> listTraits.remove i s)
 
 update : ScopeLikeTraits k s i d -> i -> (s -> OpResult s i) -> s -> OpResult s i
 update traits i fn s =
     let ts = scopeTraitsFor traits s
         err = Error.makeMsg ["Cannot find child at", toString i]
 
-        concatCursor child res =
-             { res | cursor = res.cursor ++ child.cursor }
+        concatCursor cursor res =
+             { res | cursor = res.cursor ++ cursor }
     in
-        ts.childScopeAt i s
-            |> Result.fromMaybe (err)
+        childScopeAt traits i s
             |> Result.andThen fn
             |> Result.andThen (\child ->
-                ts.replace i child.new s
-                    |> Result.map (concatCursor child))
+                replace traits i child.new s
+                    |> Result.map (concatCursor child.cursor))
 
+
+-- RECURSIVE -------------------------------------------------------------------
+
+recursiveAppend : ScopeLikeTraits k s i d -> Path i -> s -> s -> OpResult s i
+recursiveAppend traits path new s =
+    case path of
+        [] -> append traits new s
+        i :: is -> update traits i (recursiveAppend traits is new) s
+
+
+
+recursiveRemove : ScopeLikeTraits k s i d -> Path i -> s -> OpResult s i
+recursiveRemove traits path s =
+    case path of
+        [] -> Error.err "Cannot remove the root"
+        [i] -> remove traits i s
+        i :: is -> update traits i (recursiveRemove traits is) s
+
+
+-- SCOPE QUICK ACCESS ----------------------------------------------------------
+
+
+listScopeFor : ScopeLikeTraits k s i d -> s -> Result Error (ListScopeTraits k s i)
+listScopeFor traits s =
+    let ts = scopeTraitsFor traits s
+    in case ts.base of
+        ListScope listTraits -> Ok listTraits
+        _ -> Error.errMsg ["Not a list scope:", toString s]
+
+
+childScopeAt : ScopeLikeTraits k s i d -> i -> s -> Result Error s
+childScopeAt traits i s =
+    let err i = (Error.makeMsg ["Cannot find child at:", toString i])
+    in listScopeFor traits s
+        |> Result.andThen (\ts ->
+            ts.childScopeAt i s |> Result.fromMaybe (err i))
+
+
+childScopeAndTraitsAt : ScopeLikeTraits k s i d -> i -> s -> Result Error (ScopeTraits k s i d, s)
+childScopeAndTraitsAt traits i s =
+    let err i = (Error.makeMsg ["Cannot find child at:", toString i])
+    in listScopeFor traits s
+        |> Result.andThen (\ts ->
+            ts.childScopeAt i s
+                |> Result.fromMaybe (err i)
+                |> Result.map (\cs -> (scopeTraitsFor traits cs, cs)))
+
+
+childKeys : ScopeLikeTraits k s i d -> s -> Result Error (List i)
+childKeys traits s =
+    let err s = (Error.makeMsg ["Cannot find child Keys for:", toString s])
+    in listScopeFor traits s
+        |> Result.andThen (\ts ->
+            ts.childKeys s |> Result.fromMaybe (err s))
+
+
+-- STEPS -----------------------------------------------------------------------
+
+
+stepLR : ScopeLikeTraits k s i d -> (Int -> Int) -> Path i -> s -> Result Error (Path i)
+stepLR traits keyModFn path s =
+    case path of
+        [] -> Ok []
+        [i] -> childKeys traits s
+                |> Result.map (\ks ->
+                        List.Extra.elemIndex i ks
+                            |> Maybe.map keyModFn
+                            |> Maybe.andThen (\i -> List.head <| List.drop i ks)
+                            |> Maybe.withDefault i
+                            |> List.singleton)
+        i :: is ->
+            childScopeAt traits i s
+                |> Result.andThen (stepLR traits keyModFn is)
+                |> Result.map (\ps -> i :: ps)
+
+stepLeft : ScopeLikeTraits k s i d -> Path i -> s -> Result Error (Path i)
+stepLeft traits path s =
+    stepLR traits (\i -> i - 1) path s
+
+stepRight : ScopeLikeTraits k s i d -> Path i -> s -> Result Error (Path i)
+stepRight traits path s =
+    stepLR traits (\i -> i + 1) path s
+
+
+
+
+stepDown : ScopeLikeTraits k s i d -> Path i -> s -> Result Error (Path i)
+stepDown traits path s =
+    case path of
+        [] -> childKeys traits s
+                |> Result.map (\ks -> List.take 1 ks)
+        i :: is -> childScopeAt traits i s
+                |> Result.andThen (stepDown traits is)
+                |> Result.map (\ps -> i :: ps)
+
+
+stepIntoNth : ScopeLikeTraits k s i d -> Path i -> i -> s -> Result Error (Path i)
+stepIntoNth traits path i s =
+    case path of
+        [] -> childKeys traits s
+                |> Result.map (\ks -> if List.member i ks then [i] else [] )
+        ii :: is -> childScopeAt traits ii s
+                |> Result.andThen (stepIntoNth traits is i)
+                |> Result.map (\ps -> ii :: ps)
+
+--------------------------------------------------------------------------------
+
+
+reducePath : ScopeLikeTraits k s i d -> (i -> ScopeTraits k s i d -> s -> a -> Result Error a) -> a -> Path i -> s -> Result Error a
+reducePath traits fn init path s =
+    case path of
+        [] -> Ok init
+        i :: is ->
+            childScopeAndTraitsAt traits i s
+                |> Result.andThen (\(ts,ss) -> fn i ts ss init |> Result.map (\v -> (v, ss)))
+                |> Result.andThen (\(aa,ss) -> reducePath traits fn aa is ss)
+
+mapPath : ScopeLikeTraits k s i d -> (i -> ScopeTraits k s i d -> s -> Result Error a) -> Path i -> s -> Result Error (List a)
+mapPath traits fn path s =
+    reducePath traits
+        (\i ts s ss ->
+            Result.map (\v -> ss ++ [v]) (fn i ts s)
+            )
+       []
+       path s
+--    case path of
+--        [] -> Ok init
+--        i :: is ->
+--            childScopeAndTraitsAt traits i s
+--                |> Result.andThen (\(ts,ss) -> fn i ts ss init |> Result.map (\v -> (v, ss)))
+--                |> Result.andThen (\(aa,ss) -> reducePath traits fn aa is ss)
 

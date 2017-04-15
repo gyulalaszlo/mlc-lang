@@ -4,7 +4,7 @@ module SEd.Scopes.Model exposing (..)
 -}
 
 import Error exposing (Error)
-import SEd.Scopes exposing (OpResult, OpSuccess, ScopeTraits, ScopeLikeTraits)
+import SEd.Scopes exposing (BasicScope(..), OpResult, OpSuccess, ScopeLikeTraits, ScopeTraits)
 import SEd.Scopes.Msg exposing (Msg)
 
 
@@ -64,8 +64,11 @@ sExprAt scopeTraits path scope =
                 traits =
                     scopeTraits.traitsFor kind
             in
-                traits.childScopeAt i scope
-                    |> Maybe.andThen (sExprAt scopeTraits path)
+                case traits.base of
+                    ListScope listTraits ->
+                        listTraits.childScopeAt i scope
+                            |> Maybe.andThen (sExprAt scopeTraits path)
+                    StringScope _ -> Nothing
 
 
 -- SUBSCRIPTIONS

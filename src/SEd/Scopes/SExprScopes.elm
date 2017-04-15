@@ -69,29 +69,56 @@ keyTraits : SExprScopeTraits
 keyTraits =
     { leafScopeTraits
         | base = StringScope
+            { toString = recursiveToData
+            , fromString = Just << EKey
+            }
         , toData = Just << recursiveToData
+        , toLabel = listLabel
     }
 
 
 
 -- LIST TRAITS -----------------------------------------
 
-
-listTraits : SExprScopeTraits
+--listBaseTraits : SEd.Scopes.ListScopeTraits SExprScopeType Scope Int String
 listTraits =
-    { base = ListScope
-    , toData = Just << recursiveToData
-    , childKeys = listChildKeys
-    , childKindsAt = listChildKinds
-    , childDataAt = listChildData
-    , childScopeAt = listChildScopeFor
-    , stepLeft = listStepLeft
-    , stepRight = listStepRight
-    , appendableTypes = listAppendableTypes
-    , append = listAppend
-    , replace = listReplace
-    , remove = listRemove
+    { toData = Just << recursiveToData
+    , fromData = always Nothing
+    , toLabel = listLabel
+
+    , base = ListScope
+        { childKeys = listChildKeys
+        , childKindsAt = listChildKinds
+    --    , childDataAt = listChildData
+        , childScopeAt = listChildScopeFor
+    --    , stepLeft = listStepLeft
+    --    , stepRight = listStepRight
+        , appendableTypes = listAppendableTypes
+        , append = listAppend
+        , replace = listReplace
+        , remove = listRemove
+
+--        , stepLeft = listStepLeft
+--        , stepRight = listStepRight
+        }
+
     }
+
+--listTraits : SExprScopeTraits
+--listTraits =
+--    { base = listBaseTraits
+--    , toData = Just << recursiveToData
+--    , childKeys = listChildKeys
+--    , childKindsAt = listChildKinds
+--    , childDataAt = listChildData
+--    , childScopeAt = listChildScopeFor
+--    , stepLeft = listStepLeft
+--    , stepRight = listStepRight
+--    , appendableTypes = listAppendableTypes
+--    , append = listAppend
+--    , replace = listReplace
+--    , remove = listRemove
+--    }
 
 
 listChildKinds : Int -> Scope -> Maybe (List SExprScopeType)
@@ -164,7 +191,12 @@ listStepRight i s =
             Nothing
 
 
-
+listLabel : Scope -> String
+listLabel s =
+    case s of
+        EList [] -> "()"
+        EList ( e:: es) -> "(" ++ listLabel e  ++ ".."
+        EKey s -> ":" ++ s
 
 -------------------------------------
 
