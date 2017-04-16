@@ -1,20 +1,20 @@
-module Helpers.CssBit exposing (..)
+module Bsp.Dimension exposing (..)
 {-| Describe me please...
 -}
 
-import Color
+--import Color
 import Dict exposing (Dict)
 import Regex
 
 
-templateWith : Dict String String -> String -> String
-templateWith params =
-    Regex.replace Regex.All (Regex.regex <| "\\{\\{(.*)\\}\\}")
-        (\{submatches, match} ->
-            Maybe.withDefault match <|
-            case submatches of
-                [Just key] -> Dict.get key params
-                _ -> Nothing)
+--templateWith : Dict String String -> String -> String
+--templateWith params =
+--    Regex.replace Regex.All (Regex.regex <| "\\{\\{(.*)\\}\\}")
+--        (\{submatches, match} ->
+--            Maybe.withDefault match <|
+--            case submatches of
+--                [Just key] -> Dict.get key params
+--                _ -> Nothing)
 
 
 
@@ -59,10 +59,10 @@ p100 = Percent 0
 positionAbsolute = styleAttr "position" "absolute"
 
 
-color c =
-    let {red,green,blue,alpha} = Color.toRgb c
-        bits = List.map toString [red,green,blue]
-    in "rgba(" ++ String.join ", " bits ++ ", " ++ toString alpha ++ ")"
+--color c =
+--    let {red,green,blue,alpha} = Color.toRgb c
+--        bits = List.map toString [red,green,blue]
+--    in "rgba(" ++ String.join ", " bits ++ ", " ++ toString alpha ++ ")"
 
 -- DEFS
 
@@ -77,5 +77,4 @@ color c =
 --type Css =
 --    | Scope (List Selector) (List Css)
 --    |
-
 
