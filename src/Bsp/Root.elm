@@ -1,7 +1,6 @@
 module Bsp.Root
     exposing
-        (
-         subscriptions
+        ( subscriptions
         , update
         , view
         )
@@ -19,8 +18,6 @@ import Dict exposing (Dict)
 import Error exposing (Error)
 import Html.Events exposing (onClick)
 import List.Extra
-
-
 
 
 -- SUBSCRIPTIONS
@@ -54,19 +51,20 @@ update msg model =
 
         SwapLR c ->
             Bsp.SplitView.swapAtCursor c model.rootView
-                |> Result.map (\v -> ({ model | rootView = v }, Cmd.none))
-                |> Result.withDefault (model, Cmd.none)
+                |> Result.map (\v -> ( { model | rootView = v }, Cmd.none ))
+                |> Result.withDefault ( model, Cmd.none )
 
         SetDirection c d ->
-
             Bsp.SplitView.setDirectionAtCursor d c model.rootView
-                |> Result.map (\v -> ({ model | rootView = v }, Cmd.none))
-                |> Result.withDefault (model, Cmd.none)
+                |> Result.map (\v -> ( { model | rootView = v }, Cmd.none ))
+                |> Result.withDefault ( model, Cmd.none )
 
         Rotate c d ->
             Bsp.SplitView.rotateAtCursor d c model.rootView
-                |> Result.map (\(c,v) -> ({ model | rootView = v, cursor = c }, Cmd.none))
-                |> Result.withDefault (model, Cmd.none)
+                |> Result.map (\( c, v ) -> ( { model | rootView = v, cursor = c }, Cmd.none ))
+                |> Result.withDefault ( model, Cmd.none )
+
+
 
 -- VIEW
 
@@ -74,27 +72,32 @@ update msg model =
 view : Model m l s -> Html (Msg m l)
 view model =
     case model.layoutEditingMode of
-        NotEditingLayout -> normalView model
-        EditingLayoutBlocks -> layoutEditingView model
+        NotEditingLayout ->
+            normalView model
 
+        EditingLayoutBlocks ->
+            layoutEditingView model
 
 
 normalView : Model m l s -> Html (Msg m l)
 normalView model =
     div [ class "bsp-root-view" ]
         [ splitWrapper
-            ["root"]
+            [ "root" ]
             [ treeSubView model identity model.rootView ]
         ]
+
 
 layoutEditingView : Model m l s -> Html (Msg m l)
 layoutEditingView model =
     div [ class "bsp-root-view bsp-root-view-edited" ]
         [ model.traits.toolbars.globalLayoutEditor model.cursor model.shared
         , splitWrapper
-            ["root", "edited"]
+            [ "root", "edited" ]
             [ layoutEditingTreeSubView model identity model.rootView ]
         ]
+
+
 
 -- VIEW: treeSubView
 
@@ -113,15 +116,11 @@ layoutEditingTreeSubView model cursorFn node =
         { traits, shared } =
             model
 
-        isSelected = model.cursor == cursor
-        withSelectedClass cls =
-            if isSelected then
-                cls ++ ["selected"]
-            else
-                cls
+        isSelected =
+            model.cursor == cursor
 
-        wrapper classes els =
-            splitWrapper (withSelectedClass <| "editing-layout" :: classes ) els
+        wrapper cls els =
+            wrapperWithSelection model cursor ("editing-layout" :: cls) els
     in
         case node of
             Bsp.SplitView.Node meta ->
@@ -130,57 +129,35 @@ layoutEditingTreeSubView model cursorFn node =
 
             Bsp.SplitView.Leaf id ->
                 localModelFor cursor id model
-                    |> Maybe.map (\mdl ->
---                Dict.get id model.locals
---                    |> Maybe.map (\local ->
-                            [ (if isSelected
-                                then model.traits.toolbars.leafSelectedLayoutEditing
-                                else model.traits.toolbars.leafLayoutEditing
-                                )
-                                cursor id mdl.local model.shared
---                            , traits.view mdl
-                            ])
-
---                localModelFor cursor id model
---                    |> Maybe.map (\mdl -> [traits.view mdl])
---                            ])
+                    |> Maybe.map
+                        (\mdl ->
+                            [ (if isSelected then
+                                model.traits.toolbars.leafSelectedLayoutEditing
+                               else
+                                model.traits.toolbars.leafLayoutEditing
+                              )
+                                cursor
+                                id
+                                mdl.local
+                                model.shared
+                            ]
+                        )
                     |> Maybe.withDefault [ text "Cannot find view" ]
                     |> wrapper [ "leaf" ]
-
 
             Bsp.SplitView.Empty ->
                 wrapper [ "empty" ]
                     [ traits.empty cursor model.shared
                     ]
 
+
 {-| split view
 -}
 layoutEditingSplitView : Model m l s -> (Cursor -> Cursor) -> SplitMeta Id -> List (Html (Msg m l))
-layoutEditingSplitView model cursorFn  meta =
-    let
-        { a, b, ratio, direction } = meta
-        recur =
-            layoutEditingTreeSubView model
+layoutEditingSplitView model cursorFn meta =
+    splitViewBase model.traits.toolbars.splitLayoutEditing layoutEditingTreeSubView model cursorFn meta
 
-        cursor =
-            cursorFn CHead
 
-        ( l, r ) =
-            splitAttrs direction ratio
-
-        classFor =
-            bspClassesFor "node" [ "split", directionToString direction ]
-    in
-        [ div [ classFor [ "a" ], l ] [ recur (cursorFn << CLeft) a ]
-        , div [ classFor [ "b" ], r ] [ recur (cursorFn << CRight) b ]
-        , case model.layoutEditingMode of
-            NotEditingLayout ->
-                div [ classFor [ "toolbar" ] ] [ model.traits.toolbars.split cursor model.shared ]
-
-            EditingLayoutBlocks ->
-                div [ classFor [ "toolbar" ] ] [ model.traits.toolbars.splitLayoutEditing cursorFn  meta ]
-
-        ]
 
 -- VIEW: treeSubView
 
@@ -199,15 +176,8 @@ treeSubView model cursorFn node =
         { traits, shared } =
             model
 
-        withSelectedClass cls =
-            if (model.cursor == cursor) then
-                cls ++ ["selected"]
-            else
-                cls
-
-
-        wrapper classes els =
-            splitWrapper (withSelectedClass <| classes ) els
+        wrapper cls els =
+            wrapperWithSelection model cursor cls els
     in
         case node of
             Bsp.SplitView.Node meta ->
@@ -215,12 +185,11 @@ treeSubView model cursorFn node =
                     splitView model cursorFn meta
 
             Bsp.SplitView.Leaf id ->
-
-                localModelFor cursor id model
-                    |> Maybe.map (\mdl -> [traits.view mdl])
-                    |> Maybe.withDefault ([text "Cannot find local for view"])
-                    |> wrapper [ "leaf" ]
-
+                wrapper [ "leaf" ]
+                    [ localModelFor cursor id model
+                        |> Maybe.map (\mdl -> traits.view mdl)
+                        |> Maybe.withDefault (text "Cannot find local for view")
+                    ]
 
             Bsp.SplitView.Empty ->
                 wrapper [ "empty" ]
@@ -228,6 +197,62 @@ treeSubView model cursorFn node =
                     ]
 
 
+{-| split view
+-}
+splitView : Model m l s -> (Cursor -> Cursor) -> SplitMeta Id -> List (Html (Msg m l))
+splitView model cursorFn meta =
+    splitViewBase model.traits.toolbars.split treeSubView model cursorFn meta
+
+
+{-| split view
+-}
+splitViewBase :
+    ((Cursor -> Cursor) -> SplitMeta Id -> s -> Html (Msg m l))
+    -> (Model m l s -> (Cursor -> Cursor) -> SplitModel Id -> Html (Msg m l))
+    -> Model m l s
+    -> (Cursor -> Cursor)
+    -> SplitMeta Id
+    -> List (Html (Msg m l))
+splitViewBase toolbar recur model cursorFn meta =
+    let
+        { a, b, ratio, direction } =
+            meta
+
+        cursor =
+            cursorFn CHead
+
+        ( l, r ) =
+            splitAttrs direction ratio
+
+        classFor =
+            bspClassesFor "node" [ "split", directionToString direction ]
+    in
+        [ div [ classFor [ "a" ], l ] [ recur model (cursorFn << CLeft) a ]
+        , div [ classFor [ "b" ], r ] [ recur model (cursorFn << CRight) b ]
+        , div [ classFor [ "toolbar" ] ] [ toolbar cursorFn meta model.shared ]
+        ]
+
+
+
+-- WRAPPERS FOR BSP PANES ------------------------------------------------------
+
+
+{-| Wraps a BSP view and adds the `selected` class bit if its selected
+-}
+wrapperWithSelection : Model m l s -> Cursor -> List String -> List (Html msg) -> Html msg
+wrapperWithSelection model cursor classArgs els =
+    let
+        classBits =
+            if (model.cursor == cursor) then
+                classArgs ++ [ "selected" ]
+            else
+                classArgs
+    in
+        splitWrapper classBits els
+
+
+{-| Wraps all BSP views with proper class names
+-}
 splitWrapper : List String -> List (Html msg) -> Html msg
 splitWrapper classArgs els =
     div
@@ -241,6 +266,7 @@ splitWrapper classArgs els =
             ]
         ]
         els
+
 
 
 -- VIEW: splitView
@@ -261,31 +287,6 @@ bspClassesFor static prefixes ss =
     bspClasses static <| prefixes ++ ss
 
 
-{-| split view
--}
-splitView : Model m l s -> (Cursor -> Cursor) -> SplitMeta Id -> List (Html (Msg m l))
-splitView model cursorFn  meta =
-    let
-        { a, b, ratio, direction } = meta
-        recur =
-            treeSubView model
-
-        cursor =
-            cursorFn CHead
-
-        ( l, r ) =
-            splitAttrs direction ratio
-
-        classFor =
-            bspClassesFor "node" [ "split", directionToString direction ]
-    in
-        [ div [ classFor [ "a" ], l ] [ recur (cursorFn << CLeft) a ]
-        , div [ classFor [ "b" ], r ] [ recur (cursorFn << CRight) b ]
-        , div [ classFor [ "toolbar" ] ] [ model.traits.toolbars.split cursor model.shared ]
-        ]
-
-
-
 splitSize : Ratio -> ( Float, Float )
 splitSize r =
     case r of
@@ -296,17 +297,20 @@ splitSize r =
             ( 50, 50 )
 
 
+{-| Returns the 'style' attribute for the left and right side for the given
+Direction and Ratio.
+-}
 splitAttrs : Direction -> Ratio -> ( Html.Attribute msg, Html.Attribute msg )
 splitAttrs direction ratio =
     let
         pct s v =
             ( s, toString v ++ "%" )
 
-        pcts ss vv =
-            List.map2 pct ss vv
+        pcts vv =
+            List.map2 pct [ "left", "right", "top", "bottom" ] vv
 
         rect vv =
-            ( "position", "absolute" ) :: (pcts [ "left", "right", "top", "bottom" ] vv)
+            ( "position", "absolute" ) :: (pcts vv)
 
         attrs fn =
             splitSize ratio
@@ -319,6 +323,3 @@ splitAttrs direction ratio =
 
             Vertical ->
                 attrs (\( a, b ) -> ( [ 0, 0, 0, b ], [ 0, 0, a, 0 ] ))
-
-
-

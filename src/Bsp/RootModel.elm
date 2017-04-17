@@ -58,10 +58,10 @@ type alias Model msg local shared =
 
 
 type alias ToolbarTraits msg local shared =
-    { split : Cursor -> shared -> Html (Msg msg local)
+    { split : (Cursor -> Cursor ) -> SplitMeta Id -> shared -> Html (Msg msg local)
+    , splitLayoutEditing : (Cursor -> Cursor) -> SplitMeta Id -> shared -> Html (Msg msg local)
     , leafLayoutEditing : Cursor -> Id -> local -> shared -> Html (Msg msg local)
     , leafSelectedLayoutEditing : Cursor -> Id -> local -> shared -> Html (Msg msg local)
-    , splitLayoutEditing : (Cursor -> Cursor) -> SplitMeta Id -> Html (Msg msg local)
     , globalLayoutEditor : Cursor -> shared -> Html (Msg msg local)
     }
 

@@ -28,8 +28,8 @@ toolbarTraits labelFn =
     }
 
 
-splitToolbar : Cursor -> s ->  Html (Msg m l)
-splitToolbar cursor _ = Html.text ""
+splitToolbar : (Cursor -> Cursor) -> SplitMeta Id -> s ->  Html (Msg m l)
+splitToolbar _ _ _  = Html.text ""
 
 btn : Msg m l -> String -> Html (Msg m l)
 btn click label  = Html.button [ onClick click ] [ text label ]
@@ -64,17 +64,13 @@ layoutSelectedEditingLeafView labelFn c id l _ =
     in
          Html.div []
             [ leafLabel labelFn c id l
---            , selBtn c "SELECT"
             , btn (SplitAt c Horizontal l) "||"
             , btn (SplitAt c Vertical l) "--"
---            , parentCursor c
---                |> Maybe.map (\cc -> selBtn cc "PARENT")
---                |> Maybe.withDefault (text "")
             ]
 
 
-layoutEditingSplitView : (Cursor -> Cursor) -> SplitMeta Id -> Html (Msg m l)
-layoutEditingSplitView cursorFn {a,b,direction,ratio} =
+layoutEditingSplitView : (Cursor -> Cursor) -> SplitMeta Id -> s -> Html (Msg m l)
+layoutEditingSplitView cursorFn {a,b,direction,ratio} _ =
     let cursor = cursorFn CHead
         dirBtn dir label= btn (SetDirection cursor dir) label
         canRotate = case (a,b) of
