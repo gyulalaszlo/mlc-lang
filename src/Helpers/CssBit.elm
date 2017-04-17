@@ -3,19 +3,26 @@ module Helpers.CssBit exposing (..)
 -}
 
 import Color
+import Color.Convert
 import Dict exposing (Dict)
 import Regex
 
 
 templateWith : Dict String String -> String -> String
 templateWith params =
-    Regex.replace Regex.All (Regex.regex <| "\\{\\{(.*)\\}\\}")
+    Regex.replace Regex.All (Regex.regex <| "\\{\\{\\s*([^\\s{}]*)\\s*\\}\\}")
         (\{submatches, match} ->
             Maybe.withDefault match <|
             case submatches of
                 [Just key] -> Dict.get key params
-                _ -> Nothing)
+                _ ->
+                    Just "#133700"
+--                    Nothing
+                    )
 
+
+css : List (String, String) -> String -> String
+css params ss = templateWith (Dict.fromList params) ss
 
 
 {-| A single dimension size (like 1px or 50% or 0.2em).
@@ -59,10 +66,14 @@ p100 = Percent 0
 positionAbsolute = styleAttr "position" "absolute"
 
 
-color c =
-    let {red,green,blue,alpha} = Color.toRgb c
-        bits = List.map toString [red,green,blue]
-    in "rgba(" ++ String.join ", " bits ++ ", " ++ toString alpha ++ ")"
+color = Color.Convert.colorToCssRgba
+
+--color :
+--color c =
+--    let { alpha } = Color.toRgb c
+--    in case alpha of
+--        1 -> Color.Convert.colorToHex c
+--        _ -> Color.Convert.colorToCssRgba c
 
 -- DEFS
 

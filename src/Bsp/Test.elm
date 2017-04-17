@@ -1,15 +1,21 @@
 module Bsp.Test exposing (main)
 {-| Describe me please...
 -}
-import Bsp.Root exposing (LocalModel, Model, css, modelFrom, subscriptions, update, view)
+import Bsp.Cursor exposing (parentCursor)
+import Bsp.DefaultTheme
+import Bsp.RootModel exposing (LayoutEditingMode(EditingLayoutBlocks), LocalModel, Model, Msg(..), modelFrom)
+import Bsp.Root exposing (subscriptions, update, view)
 import Bsp.SplitView exposing (Direction(Horizontal, Vertical))
+import Colors.Monokai
+import Css
 import Html exposing (Html, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import MLC.Cursor exposing (Cursor)
 import Task
 
-type alias Msg = Bsp.Root.Msg ChildMsg ChildModel
+type alias Msg = Bsp.RootModel.Msg ChildMsg ChildModel
+type alias Model = LocalModel ChildMsg ChildModel Int
 --type alias Model = Bsp.Root.Model ChildMsg ChildModel Int
 
 --init : ( Model, Cmd Msg )
@@ -36,7 +42,7 @@ withCss css view model =
 main =
     Html.program
         { init = init
-        , view = withCss (css ++ childViewCss) view
+        , view = withCss Bsp.DefaultTheme.css view
         , update = update
         , subscriptions = subscriptions
         }
@@ -53,32 +59,39 @@ bspTraits =
     , view = childView
 
     , empty = empty
-    , leafToolbar = leafToolbar
-    , splitToolbar = splitToolbar
+--    , leafToolbar = leafToolbar
+--    , splitToolbar = splitToolbar
+    , toolbars = Bsp.DefaultTheme.toolbarTraits childLabel
     }
 
 
 -- VIEW: childView
 
 
-childUpdate : ChildMsg -> LocalModel ChildModel Int -> (LocalModel ChildModel Int, Cmd ChildMsg)
+childUpdate : ChildMsg -> Model -> (ChildModel, Int, Cmd Msg)
 childUpdate msg  model =
     let {local,shared} = model
     in case local of
-        A -> (model, Cmd.none)
-        B -> (model, Cmd.none)
+        A -> (local, shared, Cmd.none)
+        B -> (local, shared, Cmd.none)
 
 
 {-| child view
 -}
-childView : LocalModel ChildModel Int -> Html ChildMsg
-childView {local, shared} =
+childView : Model -> Html Msg
+childView {local, shared, cursor, msg} =
     case local of
         A ->
-            Html.div [] [ Html.text  "AAAA" ]
+            Html.div []
+                [ Html.text  "AAAA"
+                , leafToolbar cursor
+                ]
 
         B ->
-            Html.div [] [ Html.text "BBBB" ]
+            Html.div []
+                [ Html.text  "BBBB"
+                , leafToolbar cursor
+                ]
 
 
 
@@ -87,14 +100,14 @@ childView {local, shared} =
 empty cursor _ =
     Html.div []
         [ Html.text "Nothing"
-        , Html.button [ onClick <| Bsp.Root.SplitAt cursor Horizontal A ] [ text "-> A" ]
-        , Html.button [ onClick <| Bsp.Root.SplitAt cursor Horizontal B ] [ text "-> B" ]
+        , Html.button [ onClick <| SplitAt cursor Horizontal A ] [ text "-> A" ]
+        , Html.button [ onClick <| SplitAt cursor Horizontal B ] [ text "-> B" ]
         ]
 
 
 btn cursor direction v label =
-    Html.span
-        [ class "btn",  onClick <| Bsp.Root.SplitAt cursor direction v ]
+    Html.button
+        [ onClick <| SplitAt cursor direction v ]
         [ text label ]
 
 
@@ -102,59 +115,23 @@ hbtn cursor = btn cursor Horizontal
 vbtn cursor = btn cursor Vertical
 
 --leafToolbar : (ChildMsg -> Msg) -> Cursor -> ChildModel -> Int -> Html Msg
-leafToolbar msg c local _ =
+leafToolbar c =
      Html.div []
-        [ Html.button [onClick <| Bsp.Root.Select c] [ text <| "LEAF:" ++ toString c ]
+        [ Html.button [onClick <| Select c] [ text <| "SELECT" ]
+        , Html.button [onClick <| SetLayoutEditingMode EditingLayoutBlocks] [ text <| "LAYOUT" ]
         , hbtn c A "|| A"
         , hbtn c B "|| B"
         , vbtn c A "-- A"
         , vbtn c B "-- B"
-        , Bsp.Root.parentCursor c
-            |> Maybe.map (\cc ->
-                Html.button [onClick <| Bsp.Root.Select cc ] [ text <| "Parent" ++ toString cc  ])
-            |> Maybe.withDefault (text "")
+--        , parentCursor c
+--            |> Maybe.map (\cc ->
+--                Html.button [onClick <| Select cc ] [ text <| "Parent" ++ toString cc  ])
+--            |> Maybe.withDefault (text "")
         ]
 
---splitToolbar : Cursor -> Int ->  Html Msg
-splitToolbar cursor _ = Html.text ""
 
-
-{-| CSS parts for childView
--}
-childViewCss : String
-childViewCss = """
-.child-view {  }
-
-.btn { display:inline-block; padding: 0.3em 1em; cursor: pointer; font-size:0.8em;}
-.btn:hover { text-decoration:underline; }
-
-.bsp-root-view { background: black; position: absolute; left: 0; right:0; top:0; bottom:0; }
-
-.bsp-view-split-wrapper-leaf { background-color: #242527; color: #ccc; border-radius:1em; margin:2px;  }
-.bsp-view-split-wrapper-leaf-selected {  }
-
-.bsp-view-node {}
-.bsp-view-node-split {}
-.bsp-view-node-split-horizontal {}
-.bsp-view-node-split-horizontal-a {}
-.bsp-view-node-split-horizontal-b {}
-.bsp-view-node-split-horizontal-toolbar { }
-
-.bsp-view-node-split-vertical {}
-.bsp-view-node-split-vertical-a {}
-.bsp-view-node-split-vertical-b {}
-.bsp-view-node-split-vertical-toolbar { }
-
-
-.bsp-view-split-wrapper-node { border-radius: 1em; }
-.bsp-view-split-wrapper-selected-node {}
-.bsp-view-split-wrapper-selected-node-horizontal {}
-.bsp-view-split-wrapper-selected-node-vertical {}
-.bsp-view-split-wrapper-node-horizontal {}
-.bsp-view-split-wrapper-node-vertical {}
-
-.bsp-view-split-wrapper-node-vertical-selected,
-.bsp-view-split-wrapper-node-horizontal-selected { background: #f70; }
-"""
-
-
+childLabel : ChildModel -> String
+childLabel m =
+    case m of
+        A -> "A"
+        B -> "B"
