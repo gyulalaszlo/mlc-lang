@@ -215,7 +215,12 @@ editingGlobal shared model = globalToolbar EditingLayoutBlocks shared model
 
 normalLeaf : LeafViewFn m l s
 normalLeaf view model =
-    view model
+    div [ class "normal-leaf" ]
+        [ view model
+        , div [ class "leaf-id" ]
+            [ text <| toString model.id
+            ]
+        ]
 
 
 normalSplit : SplitViewFn m l s
@@ -449,4 +454,7 @@ css =
 /* -- WRAP -- */
 
 .layout-editing-inner-wrap { position: absolute; top: {{ toolbar-height }}; left: 0; right:0; bottom: 0; }
+
+
+.leaf-id { position: absolute; right: 0; top: 0; background: {{ leaf-text }}; color: {{ leaf-background }};  padding: 0.2em 1em; }
 """

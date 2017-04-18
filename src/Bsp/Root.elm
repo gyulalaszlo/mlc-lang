@@ -145,9 +145,8 @@ treeSubView model cursorFn node =
                 in
                     nodeViewBaseTraits.split (sharedModelFor cursorFn meta model.shared) <|
                         wrapper [ "node", directionToString direction ] <|
-                            [ nodeDiv "a" l CLeft a --<| recur (cursorFn << CLeft) a -- div [ classFor [ "a" ], l ] [ recur (cursorFn << CLeft) a ]
-                            , nodeDiv "b" r CRight b --<| recur (cursorFn << CLeft) b -- div [ classFor [ "a" ], l ] [ recur (cursorFn << CLeft) a ]
---                            , div [ classFor [ "b" ], r ] [ recur (cursorFn << CRight) b ]
+                            [ nodeDiv "a" l CLeft a
+                            , nodeDiv "b" r CRight b
                             ]
 
             Bsp.SplitView.Leaf id ->
