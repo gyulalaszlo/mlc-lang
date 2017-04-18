@@ -1,7 +1,8 @@
 module Bsp.DefaultTheme
     exposing
         ( css
-        , toolbarTraits
+--        , toolbarTraits
+        , normalTheme
         )
 
 {-| Describe me please...
@@ -15,308 +16,98 @@ import Bsp.Traits exposing (..)
 import Bsp.SplitView exposing (Direction(Horizontal, Vertical), RotateDirection(..), SplitMeta, SplitModel(Node), nodeToString)
 import Colors.Monokai
 import Css
-import Error
+import Error exposing (Error)
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import Html.Keyed
 
 
-toolbarTraits : (l -> String) -> List l -> ToolbarTraits m l s
-toolbarTraits labelFn emptySelectable =
-    { normal = normalModeTraitsFor labelFn emptySelectable
-    , layoutEditing = editingModeTraitsFor labelFn emptySelectable
-    }
-
 
 
 -- REGULAR TOOLBARS ------------------------------------------------------------
 
---
---splitToolbar : (Cursor -> Cursor) -> SplitMeta Id -> s -> Html (Msg m l)
---splitToolbar _ _ _ =
---    Html.text ""
---
-
-btn : Msg m l -> String -> Html (Msg m l)
-btn click label =
-    Html.button [ onClick click ] [ text label ]
 
 
+normalTheme : (l -> String) -> List l -> NodeViewWrapper m l s
+normalTheme labelFn empties ctx viewToWrap =
+    case viewToWrap of
+        WrappedLeaf { model, view } -> normalThemeLeaf labelFn ctx view model
 
--- LAYOUT EDITING VIEW ---------------------------------------------------------
+        WrappedNode split ->
+            case ctx.edited of
+                WrappedNotEditing -> split.content
+                WrappedIsEditing -> normalThemeEditedSplit ctx split
 
+        WrappedEmpty empty -> emptyBase labelFn empties empty
 
-leafLabel : (l -> String) -> Cursor -> Id -> l -> Html (Msg m l)
-leafLabel labelFn c id l =
-    div
-        [ class "layout-editing-leaf-label"
-        , onClick (Select c)
-        ]
-        [ span [ class "label" ] [ text <| labelFn l ]
-        , span [ class "id" ] [ text <| toString id ]
-        ]
-
-
-layoutEditingLeafView : (l -> String) -> Cursor -> Id -> l -> s -> Html (Msg m l)
-layoutEditingLeafView labelFn c id l _ =
-    let
-        selBtn cc label =
-            btn (Select cc) label
-    in
-        Html.div []
-            [ leafLabel labelFn c id l
-            , btn (RotateParent CW c) <| "<~"
-            , btn (RotateParent CCW c) <| "~>"
-            ]
-
-
-layoutSelectedEditingLeafView : (l -> String) -> Cursor -> Id -> l -> s -> Html (Msg m l)
-layoutSelectedEditingLeafView labelFn c id l _ =
-    let
-        selBtn cc label =
-            btn (Select cc) label
-    in
-        Html.div []
-            [ leafLabel labelFn c id l
-            , btn (SplitAt c Horizontal l) "||"
-            , btn (SplitAt c Vertical l) "--"
-            , btn (DeleteAt c) "DEL"
-            ]
-
-
---layoutEditingSplitView : (Cursor -> Cursor) -> SplitMeta Id -> s -> Html (Msg m l)
---layoutEditingSplitView cursorFn { a, b, direction, ratio } _ =
---    let
---        cursor =
---            cursorFn CHead
---
---        dirBtn dir label =
---            btn (SetDirection cursor dir) label
---
---        canRotate =
---            case ( a, b ) of
---                ( _, Node _ ) ->
---                    True
---
---                ( Node _, _ ) ->
---                    True
---
---                _ ->
---                    False
---    in
---        div [ class "layout-editing-split-view" ]
---            [ btn (Select cursor) <| "."
---            , text <| " A=" ++ nodeToString a
---            , text <| " B=" ++ nodeToString b
---            , btn (Rotate CW cursor) <| "<-R"
---            , btn (Rotate CCW cursor) <| "R->"
---            , btn (SwapLR cursor) <| "AB -> BA"
---            , case direction of
---                Vertical ->
---                    dirBtn Horizontal "-- H --"
---
---                Horizontal ->
---                    dirBtn Vertical "|| V ||"
---            ]
-
-
---globalLayoutEditor : Cursor -> s -> Html (Msg m l)
---globalLayoutEditor c s =
---    div [ class "layout-editor-global-header" ]
---        [ btn (SetLayoutEditingMode NotEditingLayout) "Done editing"
---        , text <| toString c
---        ]
+        WrappedGlobal global -> normalThemeToolbar labelFn empties ctx global
 
 
 
--- TRAITS ======================================================================
-
-
-normalModeTraitsFor :(l -> String) -> List l -> NodeViewModeTraits m l s
-normalModeTraitsFor labelFn empties =
-    { normal = normalTraits labelFn empties
-    , selected = selectedTraits labelFn empties
-    , global = normalGlobal
-    }
-
-
-editingModeTraitsFor :(l -> String) -> List l -> NodeViewModeTraits m l s
-editingModeTraitsFor labelFn empties =
-    { normal = layoutEditingNormalTraits labelFn empties
-    , selected = layoutEditingSelectedTraits labelFn empties
-    , global = editingGlobal
-    }
-
-
-normalTraits : (l -> String) -> List l -> NodeViewBaseTraits m l s
-normalTraits labelFn empties =
-    { leaf = normalLeaf
-    , split = normalSplit
-    , empty = normalEmpty labelFn empties
-    }
-
-
-selectedTraits : (l -> String) -> List l -> NodeViewBaseTraits m l s
-selectedTraits labelFn empties =
-    { leaf = selectedLeaf
-    , split = selectedSplit
-    , empty = selectedEmpty labelFn empties
-    }
-
-layoutEditingNormalTraits : (l -> String) -> List l -> NodeViewBaseTraits m l s
-layoutEditingNormalTraits labelFn empties =
-    { leaf = layoutEditingNormalLeaf
-    , split = layoutEditingNormalSplit
-    , empty = normalEmpty labelFn empties
-    }
-
-
-layoutEditingSelectedTraits : (l -> String) -> List l -> NodeViewBaseTraits m l s
-layoutEditingSelectedTraits labelFn empties =
-    { leaf = layoutEditingSelectedLeaf
-    , split = layoutEditingSelectedSplit
-    , empty = selectedEmpty labelFn empties
-    }
-
-
--- NORMAL ======================================================================
-
-globalToolbar mode shared model =
-    div [ class "global-toolbar" ]
-        [ case mode of
-            NotEditingLayout -> btn (SetLayoutEditingMode EditingLayoutBlocks) "Edit layout"
-            EditingLayoutBlocks -> btn (SetLayoutEditingMode NotEditingLayout) "Done"
-        , text " | "
-        , globalToolbarCurrent model
-        ]
-
-
-globalToolbarCurrent model =
-    case model of
---        Err err -> span [ class "error" ] [ text <| String.fromList <| List.take 30 <| String.toList <| Error.errorToString err ]
-        Err err -> span [ class "error" ] [ text <| Error.errorToString err ]
-        Ok {cursor, id} -> span [ class "current" ] [ text <| toString cursor ]
-
-normalGlobal shared model = globalToolbar NotEditingLayout shared model
-editingGlobal shared model = globalToolbar EditingLayoutBlocks shared model
-
-
-
--- NOT SELECTED
-
-
-normalLeaf : LeafViewFn m l s
-normalLeaf view model =
-    div [ class "normal-leaf" ]
-        [ view model
-        , div [ class "leaf-id" ]
-            [ text <| toString model.id
-            ]
-        ]
-
-
-normalSplit : SplitViewFn m l s
-normalSplit { shared, meta, cursor } html =
-    html
-
-
-normalEmpty : (l -> String) -> List l -> Cursor -> s -> Html (Msg m l)
-normalEmpty labelFn empties cursor shared =
+emptyBase labelFn empties {cursor} =
     Html.div
         []
         [ Html.Keyed.ul [] <|
             List.indexedMap (\i l-> (toString i, l)) <|
-            List.map (\l -> Html.li [] [ btn (SplitAt cursor Horizontal l) <| "to: " ++ labelFn l] ) empties
-
+            List.map (\l -> Html.li [] [ btn (SplitAt cursor Horizontal l) <| labelFn l] ) empties
         ]
 
 
 
--- SELECTED
 
-
-selectedLeaf : LeafViewFn m l s
-selectedLeaf view model =
-    view model
-
-
-selectedSplit : SplitViewFn m l s
-selectedSplit { shared, meta, cursor } html =
-    html
-
-
-selectedEmpty : (l -> String) -> List l -> Cursor -> s -> Html (Msg m l)
-selectedEmpty =
-    normalEmpty
-
-
-
--- LAYOUT EDITING ==============================================================
-
-
-editingTraits : NodeViewBaseTraits m l s
-editingTraits =
-    { leaf = layoutEditingNormalLeaf
-    , split = layoutEditingNormalSplit
-    , empty = layoutEditingNormalEmpty
-    }
-
-
-layoutEditingNormalLeaf : LeafViewFn m l s
-layoutEditingNormalLeaf view model =
-    view model
-
-
-layoutEditingNormalSplit : SplitViewFn m l s
-layoutEditingNormalSplit { shared, meta, cursor } html =
-    div [ class "layout-editing-split-wrapper  layout-editing-split-wrapper-not-selected" ]
-        [ layoutEditingNormalSplitView cursor meta shared
-        , div [class "layout-editing-inner-wrap" ] [ html ]
+normalThemeToolbar labelFn empties ctx {rootView, cursor, shared, selectedLeafId, selectedLeafModel} =
+    div [ class "global-toolbar" ]
+        [ case ctx.edited of
+            WrappedNotEditing -> btn (SetLayoutEditingMode EditingLayoutBlocks) "Edit layout"
+            WrappedIsEditing -> btn (SetLayoutEditingMode NotEditingLayout) "Done"
+        , text " | "
+        , text <| Bsp.SplitView.nodeToString rootView
+        , text " | "
+        , case selectedLeafModel of
+            Nothing -> text "No leaf selected"
+            Just model -> toolbarLeaf labelFn empties model
         ]
 
 
-layoutEditingNormalEmpty : EmptyViewFn m l s
-layoutEditingNormalEmpty cursor shared =
-    text "Empty"
+normalThemeLeaf : (l -> String) -> WrappedContext -> LeafViewFn m l s
+normalThemeLeaf labelFn ctx view model =
+    div [ class "normal-leaf" ]
+        [ view model
+        , case ctx.selected of
+            WrappedNotSelected ->
+                div [ class "leaf-id" , onClick (Select model.cursor) ]
+                    [ text <| "#" ++ toString model.id ++ " "
+                    , text <| labelFn model.local
+                    ]
+            WrappedIsSelected ->
+                text ""
+        ]
 
 
-layoutEditingNormalSplitView : (Cursor -> Cursor) -> SplitMeta Id -> s -> Html (Msg m l)
-layoutEditingNormalSplitView cursorFn { a, b, direction, ratio } _ =
-        div [ class "layout-editing-split-view layout-editing-split-view-not-selected", onClick (Select (cursorFn <| CHead )) ]
---            [ btn (Select (cursorFn <| CHead)) "."
-            [ text <| " A=" ++ nodeToString a
-            , text <| " B=" ++ nodeToString b
-            ]
+-- SPLIT
 
--- SELECTED
-
-
-layoutEditingSelectedLeaf : LeafViewFn m l s
-layoutEditingSelectedLeaf view model =
-    view model
-
-
-layoutEditingSelectedSplit : SplitViewFn m l s
-layoutEditingSelectedSplit { shared, meta, cursor } html =
-    div [ class "layout-editing-split-wrapper layout-editing-split-wrapper-selected" ]
-        [ layoutEditingSplitView cursor meta shared
-        , div [class "layout-editing-inner-wrap" ] [html ]]
+normalThemeEditedSplit ctx { cursorFn, shared, meta, content } =
+    case ctx.selected of
+        WrappedNotSelected ->
+            div [ class "layout-editing-split-wrapper  layout-editing-split-wrapper-not-selected" ]
+                [ normalThemeEditedSplitView ctx cursorFn meta shared
+                , div [class "layout-editing-inner-wrap" ] [ content ]
+                ]
+        WrappedIsSelected ->
+            div [ class "layout-editing-split-wrapper layout-editing-split-wrapper-selected" ]
+                [ normalThemeEditedSplitView ctx cursorFn meta shared
+                , div [class "layout-editing-inner-wrap" ] [content ]]
 
 
-layoutEditingSelectedEmpty : EmptyViewFn m l s
-layoutEditingSelectedEmpty cursor shared =
-    text "Empty"
-
-
-layoutEditingSplitView : (Cursor -> Cursor) -> SplitMeta Id -> s -> Html (Msg m l)
-layoutEditingSplitView cursorFn { a, b, direction, ratio } _ =
+normalThemeEditedSplitView : WrappedContext -> (Cursor -> Cursor) -> SplitMeta Id -> s -> Html (Msg m l)
+normalThemeEditedSplitView ctx cursorFn { a, b, direction, ratio } _ =
     let
         cursor =
             cursorFn CHead
 
         dirBtn dir label =
-            btn (SetDirection cursor dir) label
+            btn (SetDirection dir cursor) label
 
         resizeBtn r label = btn (ResizeAt r cursor) label
 
@@ -331,22 +122,81 @@ layoutEditingSplitView cursorFn { a, b, direction, ratio } _ =
                 _ ->
                     False
     in
-        div [ class "layout-editing-split-view layout-editing-split-selected" ]
+        div (case ctx.selected of
+                WrappedNotSelected ->
+                    [ class "layout-editing-split-view layout-editing-split-not-selected"
+                    , onClick (Select cursor)
+                    ]
+                _ -> [ class "layout-editing-split-view layout-editing-split-selected" ])
             [ text <| " A=" ++ nodeToString a
             , text <| " B=" ++ nodeToString b
-            , btn (Rotate CW cursor) <| "<-R"
-            , btn (Rotate CCW cursor) <| "R->"
-            , btn (SwapLR cursor) <| "AB -> BA"
-            , case direction of
-                Vertical ->
-                    dirBtn Horizontal "-- H --"
+            , case ctx.selected of
+                WrappedNotSelected -> text ""
+                WrappedIsSelected ->
+                    span []
+                        [ btn (Rotate CW cursor) <| "<-R"
+                        , btn (Rotate CCW cursor) <| "R->"
+                        , btn (SwapLR cursor) <| "AB -> BA"
+                        , case direction of
+                            Vertical ->
+                                dirBtn Horizontal "-- H --"
 
-                Horizontal ->
-                    dirBtn Vertical "|| V ||"
-            , resizeBtn (FixedB 66) "1+2"
-            , resizeBtn (Equal) "=="
-            , resizeBtn (FixedA 66) "1+2"
+                            Horizontal ->
+                                dirBtn Vertical "|| V ||"
+                        , resizeBtn (FixedB 66) "1+2"
+                        , resizeBtn (Equal) "=="
+                        , resizeBtn (FixedA 66) "1+2"
+                        ]
             ]
+
+-- TOOLBAR --
+
+toolbarLeaf labelFn empties mdl =
+    let {cursor,id, local} = mdl
+    in
+        [ List.map (\l -> btn (SplitAt cursor Horizontal l) <| "|| " ++ labelFn l) empties
+        , List.map (\l -> btn (SplitAt cursor Vertical l) <| "-- " ++ labelFn l) empties
+        ] ++ parentToolbar labelFn empties mdl
+            |> List.intersperse ([text " | "])
+            |> List.concat
+            |> span [ class "toolbar-leaf" ]
+
+
+
+parentToolbar labelFn empties {cursor, id, local} =
+    case Bsp.Cursor.parentCursor cursor of
+        Nothing -> []
+        Just cc ->
+            [
+                [ text "Rot "
+                , btn (Rotate CCW cc) <| "<-"
+                , btn (Rotate CW cc) <| "->"
+                ]
+            ,
+                [ text "RotP "
+                , btn (RotateParent CW cc) <| "<=="
+                , btn (RotateParent CCW cc) <| "==>"
+                ]
+            ,   [ btn (SwapLR cc) <| "<->"
+                ]
+            ,   [ btn (SetDirection Horizontal cc) "| Hor |"
+                , btn (SetDirection Vertical cc) "- Ver -"
+                ]
+            ,   [ btn (ResizeAt (FixedB 66) cc) "66/33"
+                , btn (ResizeAt Equal cc) "50/50"
+                , btn (ResizeAt (FixedA 66) cc) "33/66"
+                ]
+            ]
+
+
+
+
+
+btn : Msg m l -> String -> Html (Msg m l)
+btn click label =
+    Html.button [ onClick click ] [ text label ]
+
+
 
 -- CSS -------------------------------------------------------------------------
 

@@ -7,7 +7,6 @@ module Bsp.Model
         , localModelFor
         , sharedModelFor
         , localModelAt
-        , nodeViewBaseTraitsFor
         )
 
 {-| Describe me please...
@@ -90,24 +89,6 @@ sharedModelFor : (Cursor -> Cursor) -> SplitMeta Id -> s -> SharedModel s
 sharedModelFor cFn meta s =
     { shared = s, cursor = cFn, meta = meta }
 
-
-{-|
--}
-nodeViewBaseTraitsFor : Cursor -> Model m l s -> NodeViewBaseTraits m l s
-nodeViewBaseTraitsFor c model =
-    let
-        toolbar =
-            case model.layoutEditingMode of
-                NotEditingLayout ->
-                    model.traits.toolbars.normal
-
-                EditingLayoutBlocks ->
-                    model.traits.toolbars.layoutEditing
-    in
-        if model.cursor == c then
-            toolbar.selected
-        else
-            toolbar.normal
 
 
 

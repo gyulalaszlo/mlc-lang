@@ -7,7 +7,7 @@ module Bsp.Traits exposing (..)
 
 import Bsp.Cursor exposing (Cursor)
 import Bsp.Msg exposing (Id, Msg)
-import Bsp.SplitView exposing (SplitMeta)
+import Bsp.SplitView exposing (SplitMeta, SplitModel)
 import Error exposing (Error)
 import Html exposing (Html)
 
@@ -27,6 +27,63 @@ type alias SharedModel shared =
     , meta : SplitMeta Id
     }
 
+
+-- =======
+
+
+type alias LeafWrapperModel m l s =
+    { model: LocalModel m l s
+    , view: LocalModel m l s -> Html (Msg m l)
+    }
+
+type alias GlobalWrapperModel m l s =
+    { rootView : SplitModel Id
+    , cursor: Cursor
+    , shared: s
+    , selectedLeafId : Maybe Id
+    , selectedLeafModel: Maybe (LocalModel m l s)
+    }
+
+
+type alias EmptyWrapperModel s =
+    { shared: s
+    , cursor: Cursor
+    }
+
+type alias NodeWrapperModel m l s =
+    { shared : s
+    , cursorFn : Cursor -> Cursor
+    , meta : SplitMeta Id
+    , content: Html (Msg m l)
+    }
+
+type WrappedNodeView m l s
+    = WrappedLeaf (LeafWrapperModel m l s)
+    | WrappedNode (NodeWrapperModel m l s)
+    | WrappedEmpty (EmptyWrapperModel s)
+    | WrappedGlobal (GlobalWrapperModel m l s)
+
+type WrappedSelection
+    = WrappedIsSelected
+    | WrappedNotSelected
+
+type WrappedEditMode
+    = WrappedIsEditing
+    | WrappedNotEditing
+
+type alias WrappedContext =
+    { selected: WrappedSelection
+    , edited: WrappedEditMode
+    }
+
+
+type alias WrapperFnBase ctx m l s = ctx -> WrappedNodeView m l s -> Html (Msg m l)
+
+type alias NodeViewWrapper m l s = WrapperFnBase WrappedContext m l s
+
+
+
+-- =======
 
 type alias EmptyViewFn msg local shared =
     Cursor -> shared -> Html (Msg msg local)
@@ -75,6 +132,5 @@ type alias Traits msg local shared =
     { subscriptions : LocalModel msg local shared -> Sub msg
     , update : msg -> LocalModel msg local shared -> ( local, shared, Cmd (Msg msg local) )
     , view : LocalViewFn msg local shared
-    , empty : Cursor -> shared -> Html (Msg msg local)
-    , toolbars : ToolbarTraits msg local shared
+    , wrapper :NodeViewWrapper msg local shared
     }

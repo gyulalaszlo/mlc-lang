@@ -20,7 +20,7 @@ type Msg msg local
     | DeleteAt Cursor
     | SplitAt Cursor Direction local
     | SetLayoutEditingMode LayoutEditingMode
-    | SetDirection Cursor Direction
+    | SetDirection Direction Cursor
     | SwapLR Cursor
     | Rotate Bsp.SplitView.RotateDirection Cursor
     | RotateParent Bsp.SplitView.RotateDirection Cursor

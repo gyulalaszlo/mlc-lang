@@ -60,10 +60,7 @@ bspTraits =
     , update = childUpdate
     , view = childView
 
-    , empty = empty
---    , leafToolbar = leafToolbar
---    , splitToolbar = splitToolbar
-    , toolbars = Bsp.DefaultTheme.toolbarTraits childLabel [A,B]
+    , wrapper = Bsp.DefaultTheme.normalTheme childLabel [A,B]
     }
 
 
@@ -82,64 +79,28 @@ childUpdate msg  model =
 -}
 childView : Model -> Html Msg
 childView {local, shared, cursor, msg} =
-    case local of
-        A ->
-            Html.div []
-                [ Html.text  "AAAA"
-                , leafToolbar cursor
-                , Html.pre [] [ text Bsp.DefaultTheme.css ]
-                ]
 
-        B ->
-            Html.div []
-                [ Html.text  "BBBB"
-                , leafToolbar cursor
-                ]
-
-
-
-
---empty : Cursor -> Int -> Html Msg
-empty cursor _ =
     Html.div []
-        [ Html.text "Nothing"
-        , Html.button [ onClick <| SplitAt cursor Horizontal A ] [ text "-> A" ]
-        , Html.button [ onClick <| SplitAt cursor Horizontal B ] [ text "-> B" ]
+        [ Html.h4 [] [ text <| childLabel local]
+        , case local of
+            A ->
+                Html.div []
+                    [ Html.pre [] [ text Bsp.DefaultTheme.css ]
+                    ]
+
+            B ->
+                Html.div []
+                    [ Html.text  "BBBB"
+                    ]
+
         ]
 
-btn v label =
-    Html.button
-        [ onClick  v ]
-        [ text label ]
-
-sbtn cursor direction v label =
-    Html.button
-        [ onClick <| SplitAt cursor direction v ]
-        [ text label ]
 
 
-hbtn cursor = sbtn cursor Horizontal
-vbtn cursor = sbtn cursor Vertical
-
---leafToolbar : (ChildMsg -> Msg) -> Cursor -> ChildModel -> Int -> Html Msg
-leafToolbar c =
-     Html.div []
-        [ Html.button [onClick <| Select c] [ text <| "." ]
-        , hbtn c A "|| A"
-        , hbtn c B "|| B"
-        , vbtn c A "-- A"
-        , vbtn c B "-- B"
-        , btn (RotateParent CW c) <| "<-R"
-        , btn (RotateParent CCW c) <| "R->"
---        , parentCursor c
---            |> Maybe.map (\cc ->
---                Html.button [onClick <| Select cc ] [ text <| "Parent" ++ toString cc  ])
---            |> Maybe.withDefault (text "")
-        ]
 
 
 childLabel : ChildModel -> String
 childLabel m =
     case m of
-        A -> "A"
-        B -> "B"
+        A -> "CSS View"
+        B -> "Blank"

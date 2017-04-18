@@ -57,7 +57,7 @@ update msg model =
                 |> Result.map (\v -> ( { model | rootView = v }, Cmd.none ))
                 |> Result.withDefault ( model, Cmd.none )
 
-        SetDirection c d ->
+        SetDirection d c ->
             Bsp.SplitView.setDirectionAtCursor d c model.rootView
                 |> Result.map (\v -> ( { model | rootView = v }, Cmd.none ))
                 |> Result.withDefault ( model, Cmd.none )
@@ -98,16 +98,22 @@ fromUpdateResult updateFn cursor model =
 view : Model m l s -> Html (Msg m l)
 view model =
     let
-        globalToolbar =
+        context =
             case model.layoutEditingMode of
-                NotEditingLayout ->
-                    model.traits.toolbars.normal
+                NotEditingLayout -> WrappedContext WrappedNotSelected WrappedNotEditing
 
-                EditingLayoutBlocks ->
-                    model.traits.toolbars.layoutEditing
+                EditingLayoutBlocks -> WrappedContext WrappedNotSelected WrappedIsEditing
+
+        global = WrappedGlobal
+                    { rootView = model.rootView
+                    , cursor = model.cursor
+                    , shared = model.shared
+                    , selectedLeafId = model.selectedLeaf
+                    , selectedLeafModel = (localModelAt model.cursor model) |> Result.toMaybe
+                    }
     in
         div [ class "bsp-root-view" ]
-            [ globalToolbar.global model.shared (localModelAt model.cursor model)
+            [ model.traits.wrapper context global
             , splitWrapper [ "root" ] [ treeSubView model identity model.rootView ]
             ]
 
@@ -130,8 +136,20 @@ treeSubView model cursorFn node =
         wrapper cls els =
             wrapperWithSelection model cursor cls els
 
-        nodeViewBaseTraits =
-            nodeViewBaseTraitsFor cursor model
+--        nodeViewBaseTraits =
+--            nodeViewBaseTraitsFor cursor model
+
+        selectionMode =
+            if model.cursor == cursor then WrappedIsSelected else WrappedNotSelected
+
+        editingMode =
+            case model.layoutEditingMode of
+                    NotEditingLayout -> WrappedNotEditing
+                    EditingLayoutBlocks -> WrappedIsEditing
+
+        context =
+            WrappedContext selectionMode editingMode
+
     in
         case node of
             Bsp.SplitView.Node meta ->
@@ -149,25 +167,48 @@ treeSubView model cursorFn node =
                             ]
                             [ recur (cursorFn << dir) el ]
                 in
-                    nodeViewBaseTraits.split (sharedModelFor cursorFn meta model.shared) <|
+                    splitFor context cursorFn meta model <|
                         wrapper [ "node", directionToString direction ] <|
                             [ nodeDiv "a" l CLeft a
                             , nodeDiv "b" r CRight b
                             ]
 
             Bsp.SplitView.Leaf id ->
-                wrapper [ "leaf" ]
-                    [ localModelFor cursor id model
-                        |> Maybe.map (\mdl -> nodeViewBaseTraits.leaf model.traits.view mdl)
-                        |> Maybe.withDefault (text "Cannot find local for view")
-                    ]
+                    localModelFor cursor id model
+                        |> Maybe.map (\mdl -> [leafFor context mdl model])
+                        |> Maybe.withDefault []
+                        |> wrapper [ "leaf" ]
 
             Bsp.SplitView.Empty ->
-                wrapper [ "empty" ]
-                    [ nodeViewBaseTraits.empty cursor model.shared
-                    ]
+                wrapper [ "empty" ] [ emptyFor context cursor model ]
 
 
+-- wrapper fns
+
+
+emptyFor : WrappedContext -> Cursor -> Model m l s -> Html (Msg m l)
+emptyFor context cursor {traits,shared} =
+    traits.wrapper context <|
+        WrappedEmpty {shared = shared, cursor = cursor}
+
+
+splitFor : WrappedContext -> (Cursor -> Cursor) -> SplitMeta Id -> Model m l s -> Html (Msg m l) -> Html (Msg m l)
+splitFor context cursorFn meta model el =
+    model.traits.wrapper context <|
+        WrappedNode
+            { shared = model.shared
+            , cursorFn = cursorFn
+            , meta = meta
+            , content = el
+            }
+
+leafFor : WrappedContext -> LocalModel m l s -> Model m l s -> Html (Msg m l)
+leafFor context localModel model =
+    model.traits.wrapper context <|
+        WrappedLeaf
+            { model = localModel
+            , view = model.traits.view
+            }
 
 -- WRAPPERS FOR BSP PANES ------------------------------------------------------
 
