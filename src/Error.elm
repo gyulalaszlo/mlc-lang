@@ -7,35 +7,72 @@ type Error
     = Error { msg : String , children: List Error }
 
 
+withMsg : List String -> String
+withMsg ss = (String.join " " ss)
+
+{-| Create a result from a string.
+-}
 err: String -> Result Error a
 err s = Err <| make s
 
+{-| Create a result from a string list.
+-}
 errMsg: List String -> Result Error a
-errMsg ss = Err <| makeMsg ss
+errMsg = err << withMsg
 
+
+{-| Blank
+-}
 empty : Error
 empty = Error { msg = "", children = [] }
 
+
+{-| Create an error from a string.
+-}
 make : String -> Error
 make s = Error { msg = s, children = [] }
 
+{-| Create an error from a string list.
+-}
 makeMsg : List String -> Error
-makeMsg s = Error { msg = (String.join " " s), children = [] }
+makeMsg = make << withMsg
 
+
+-- BASE WRAP
+
+{-| Returns a new Error wrapping e
+-}
+wrap : String -> Error -> Error
+wrap s e = Error { msg = s, children = [e] }
+
+{-| Returns a new Error wrapping e
+-}
+wrapMsg : List String -> Error -> Error
+wrapMsg = wrap << withMsg
+
+{-| Returns a new Error wrapping the errors
+-}
 wrapIn : String -> List Error -> Error
 wrapIn s es = Error { msg = s, children = es }
 
+{-| Returns a new Error wrapping the errors
+-}
+wrapInMsg : List String -> List Error -> Error
+wrapInMsg = wrapIn << withMsg
 
+{-| Wraps the potential Error in a result
+-}
 wrapError : String -> Result Error a -> Result Error a
 wrapError s r =
     Result.mapError (\e -> wrapIn s [e]) r
 
 
+{-| Wraps the potential Error in a result with a list argument
+-}
 wrapErrorMsg : List String -> Result Error a -> Result Error a
-wrapErrorMsg ss r =
-    wrapError (String.join " " ss) r
+wrapErrorMsg = wrapError << withMsg
 
-{-| Converts a list of potential errors to a
+{-| Converts a list of potential errors to a list of inners or an error if any are Err
 -}
 wrapErrors : String -> List (Result Error a) -> Result Error (List a)
 wrapErrors s rs =

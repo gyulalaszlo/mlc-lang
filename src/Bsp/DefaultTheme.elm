@@ -10,6 +10,7 @@ module Bsp.DefaultTheme
 import Bsp.Cursor exposing (Cursor(..), parentCursor)
 import Bsp.Model exposing (Model)
 import Bsp.Msg exposing (..)
+import Bsp.Ratio exposing (Ratio(..))
 import Bsp.Traits exposing (..)
 import Bsp.SplitView exposing (Direction(Horizontal, Vertical), RotateDirection(..), SplitMeta, SplitModel(Node), nodeToString)
 import Colors.Monokai
@@ -183,30 +184,22 @@ layoutEditingSelectedTraits labelFn empties =
 
 globalToolbar mode shared model =
     div [ class "global-toolbar" ]
-        [ text <| toString mode
-        , text " | "
-        , case mode of
+        [ case mode of
             NotEditingLayout -> btn (SetLayoutEditingMode EditingLayoutBlocks) "Edit layout"
             EditingLayoutBlocks -> btn (SetLayoutEditingMode NotEditingLayout) "Done"
-        , globalToolbarCurrent model
         , text " | "
+        , globalToolbarCurrent model
         ]
 
 
 globalToolbarCurrent model =
     case model of
-        Err err -> span [ class "error" ] [ text <| String.fromList <| List.take 30 <| String.toList <| Error.errorToString err ]
+--        Err err -> span [ class "error" ] [ text <| String.fromList <| List.take 30 <| String.toList <| Error.errorToString err ]
+        Err err -> span [ class "error" ] [ text <| Error.errorToString err ]
         Ok {cursor, id} -> span [ class "current" ] [ text <| toString cursor ]
 
---
-normalGlobal : GlobalViewFn m l s
 normalGlobal shared model = globalToolbar NotEditingLayout shared model
-----    text "NORMAL MODE"
---
---
-editingGlobal : GlobalViewFn m l s
 editingGlobal shared model = globalToolbar EditingLayoutBlocks shared model
-----    text "EDITING MODE"
 
 
 
@@ -237,7 +230,6 @@ normalEmpty labelFn empties cursor shared =
             List.map (\l -> Html.li [] [ btn (SplitAt cursor Horizontal l) <| "to: " ++ labelFn l] ) empties
 
         ]
---    text "Empty"
 
 
 
@@ -254,13 +246,9 @@ selectedSplit { shared, meta, cursor } html =
     html
 
 
---selectedEmpty : EmptyViewFn m l s
 selectedEmpty : (l -> String) -> List l -> Cursor -> s -> Html (Msg m l)
 selectedEmpty =
     normalEmpty
---    text "Empty"
---selectedEmpty cursor shared =
---    text "Empty"
 
 
 
@@ -330,6 +318,8 @@ layoutEditingSplitView cursorFn { a, b, direction, ratio } _ =
         dirBtn dir label =
             btn (SetDirection cursor dir) label
 
+        resizeBtn r label = btn (ResizeAt r cursor) label
+
         canRotate =
             case ( a, b ) of
                 ( _, Node _ ) ->
@@ -353,6 +343,9 @@ layoutEditingSplitView cursorFn { a, b, direction, ratio } _ =
 
                 Horizontal ->
                     dirBtn Vertical "|| V ||"
+            , resizeBtn (FixedB 66) "1+2"
+            , resizeBtn (Equal) "=="
+            , resizeBtn (FixedA 66) "1+2"
             ]
 
 -- CSS -------------------------------------------------------------------------
@@ -371,10 +364,14 @@ css =
         , ( "leaf-radius", "5px" )
         , ( "leaf-margin", "0.1em" )
 
+        , ( "color-darkbg", Css.color <| Colors.Monokai.darkBlack)
+
         -- layout-editing
         , ( "layout-border-size", "0.2em" )
         , ( "layout-margin", "0.3em" )
         , ( "layout-editing-margin", "0.3em" )
+
+        , ( "layout-editing-split-border-style", "0.1em dotted" )
         -- toolbar data
         , ( "toolbar-margin", "0.3em" )
         , ( "toolbar-height", "1.6em" )
@@ -390,7 +387,7 @@ css =
 /* LEAF BASICS --------------------------- */
 
 .bsp-view-split-wrapper-leaf { margin: {{ leaf-margin }}; border-top: {{ layout-border-size }} solid transparent;}
-.bsp-view-split-wrapper-leaf.bsp-view-split-wrapper-not-selected { background-color: #111213; color: #ccc; }
+.bsp-view-split-wrapper-leaf.bsp-view-split-wrapper-not-selected { background-color: {{ color-darkbg }}; color: #ccc; }
 .bsp-view-split-wrapper-leaf.bsp-view-split-wrapper-selected { background-color: {{ leaf-background }}; color: {{ leaf-text }}; border-top-color: {{ leaf-selection }}; }
 
 /* NODE WRAPPER -------------------------- */
@@ -425,9 +422,10 @@ css =
 .bsp-view-split-wrapper-root { margin-top: {{ toolbar-height }}; }
 
 
-.node.node-split.node-vertical.node-b { border-top: {{ layout-border-size }} solid black; }
-.node.node-split.node-horizontal.node-b { border-left: {{ layout-border-size }} solid black; }
-
+/*
+.node.node-split.node-vertical.node-b { border-top: {{ layout-editing-split-border-style }} black; }
+.node.node-split.node-horizontal.node-b { border-left: {{ layout-editing-split-border-style }} black; }
+*/
 
 
 
@@ -437,10 +435,12 @@ css =
 
 /* -- Split editor ----------------------------- */
 
-.layout-editing-split-wrapper {  border: {{ layout-border-size }} solid {{ split-background }}; background: {{ leaf-background }}; border-radius: {{ leaf-radius }}; margin: {{ layout-editing-margin }};  }
+.layout-editing-split-wrapper {  border: {{ layout-border-size }} solid {{ split-background }}; background: {{ leaf-background }}; border-radius: {{ leaf-radius }}; margin: {{ layout-editing-margin }};  background-color: {{ color-darkbg }};  }
 .layout-editing-split-wrapper-selected { border-color: {{ leaf-selection }}; }
 
 .layout-editing-split-wrapper { position: absolute; top: 0; left: 0; right:0; bottom: 0; overflow: hidden; }
+
+.bsp-view-split-wrapper-selected.bsp-view-split-wrapper-editing > .node.node-split.node-b { border-color: {{ leaf-selection }}; }
 
 .layout-editing-split-view.layout-editing-split-selected { background: {{ leaf-selection }}; }
 .layout-editing-split-view { background: {{ split-background }};  cursor: pointer; }

@@ -2,11 +2,9 @@ module Bsp.SplitView
     exposing
         ( SplitModel(..)
         , Direction(..)
-        , Ratio(..)
         , SplitMeta
         , directionToString
-        , foldViews
-        , swapNodeAB
+        , swapAB
         , at
         , valueAt
         , empty
@@ -17,6 +15,7 @@ module Bsp.SplitView
         , splitAtCursor
         , swapABAtCursor
         , setDirectionAtCursor
+        , setRatioAt
         , rotateAtCursor
         , deleteAtCursor
         , RotateDirection(..)
@@ -27,11 +26,8 @@ module Bsp.SplitView
 -}
 
 import Bsp.Cursor exposing (BspStep(Left, Right), Cursor(..))
+import Bsp.Ratio exposing (Ratio)
 import Color exposing (Color)
-
-
---import Dict exposing (Dict)
-
 import Css exposing (..)
 import Error exposing (Error)
 import Html exposing (Html, div, text)
@@ -72,19 +68,11 @@ type alias SplitMeta v =
     }
 
 
-
--- MONOID : EMPTY
-
-
-{-|
+{-| Creates a new empty leaf
 -}
 empty : SplitModel v
 empty =
     Empty
-
-
-
--- APPLICATIVE : OF
 
 
 {-| Creates a new leaf node for the BSP tree from an initial view.
@@ -92,10 +80,6 @@ empty =
 leaf : v -> SplitModel v
 leaf v =
     Leaf v
-
-
-
--- SEMIGROUP: CONCAT
 
 
 {-| Concatenates two nodes into a node
@@ -115,29 +99,30 @@ vertical =
     binary Vertical
 
 
-type alias LeafFolder v b =
-    v -> b -> b
+
+-- Specialized folding types
 
 
-type alias NodeFolder b =
-    Direction -> Ratio -> b -> b -> b -> b
+type alias ViewAndCursor v =
+    ( Cursor, SplitModel v )
 
 
-foldViews : NodeFolder b -> LeafFolder msg b -> b -> SplitModel msg -> b
-foldViews nodeFn leafFn init model =
-    case model of
-        Leaf v ->
-            leafFn v init
+type alias UpdateResult v =
+    Result Error (ViewAndCursor v)
 
-        Node { a, b, direction, ratio } ->
-            let
-                recur =
-                    foldViews nodeFn leafFn init
-            in
-                nodeFn direction ratio (recur a) (recur b) init
 
-        Empty ->
-            init
+type alias CursorFn =
+    Cursor -> Cursor
+
+
+{-|
+-}
+type alias CursorUpdateFn v =
+    CursorFn -> SplitModel v -> UpdateResult v
+
+
+
+-- VALUE AT --------------------------------------------------------------------
 
 
 at : Cursor -> SplitModel v -> Result Error (SplitModel v)
@@ -150,9 +135,13 @@ valueAt c v =
     case at c v of
         Ok (Leaf v) ->
             Ok v
+        Ok (_) ->
+            Error.errMsg [ "Cannot get value from node:", toString v ]
 
-        vv ->
-            Error.errMsg [ "Cannot get value from node:", toString vv ]
+        Err e ->
+            e
+                |> Error.wrapMsg ["in valueAt  ", toString c, toString v]
+                |> Err
 
 
 
@@ -195,81 +184,14 @@ attemptNodeMetaOp err fn v =
 -- SWAP A/B -> B/A -------------------------------------------------------------
 
 
-swapNodeAB : SplitModel v -> Maybe (SplitModel v)
-swapNodeAB n =
-    mapNodeMeta (\n -> { n | a = n.b, b = n.a, ratio = flipRatio n.ratio }) n
+swapAB : SplitModel v -> Maybe (SplitModel v)
+swapAB n =
+    mapNodeMeta swapABMeta n
 
 
-{-| The split ratio for a BSP is pretty simple: either one size is
-fixed to some value or both are equal.
--}
-type Ratio
-    = FixedA CssDimension
-    | FixedB CssDimension
-    | Equal
-
-
-flipRatio : Ratio -> Ratio
-flipRatio r =
-    case r of
-        FixedA d ->
-            FixedB d
-
-        FixedB d ->
-            FixedA d
-
-        _ ->
-            r
-
-
-
--- BSP VIEW TREE OPERATIONS ----------------------------------------------------
-
-
-splitAtCursor : Direction -> Ratio -> v -> Cursor -> SplitModel v -> Result Error ( Cursor, SplitModel v )
-splitAtCursor direction ratio id cursor node =
-    let
-        recur cc newNode =
-            splitAtCursor direction ratio id cc newNode
-    in
-        case ( node, cursor ) of
-            ( Empty, CHead ) ->
-                Ok <| ( cursor, leaf id )
-
-            ( _, CHead ) ->
-                Ok <| ( CRight CHead, binary direction ratio node <| leaf id )
-
-            ( Node m, CLeft cc ) ->
-                recur cc m.a |> Result.map (\( c, aa ) -> ( CLeft c, Node { m | a = aa } ))
-
-            ( Node m, CRight cc ) ->
-                recur cc m.b |> Result.map (\( c, bb ) -> ( CRight c, Node { m | b = bb } ))
-
-            _ ->
-                Error.errMsg
-                    [ "Cannot traverse cursor:"
-                    , toString cursor
-                    , "in BSP tree:"
-                    , toString node
-                    ]
-
-
-type alias ViewAndCursor v =
-    ( Cursor, SplitModel v )
-
-
-type alias UpdateResult v =
-    Result Error (ViewAndCursor v)
-
-
-type alias CursorFn =
-    Cursor -> Cursor
-
-
-{-|
--}
-type alias CursorUpdateFn v =
-    CursorFn -> SplitModel v -> UpdateResult v
+swapABMeta : SplitMeta v -> SplitMeta v
+swapABMeta n =
+    { n | a = n.b, b = n.a, ratio = Bsp.Ratio.flipRatio n.ratio }
 
 
 
@@ -311,6 +233,72 @@ stepIntoViewAndCursor dir r =
 
 
 
+-- SPECIALIZED FOLDS FOR NODE META
+
+
+{-| operate on the tip of the cursor and return a SplitView Result
+-}
+foldWithStepInto : (SplitModel v -> Result Error (SplitModel v)) -> Cursor -> SplitModel v -> Result Error (SplitModel v)
+foldWithStepInto fn c v =
+    Bsp.Cursor.foldCursor fn stepIntoSplitView v c
+
+
+attemptNodeMetaOpAt : (Cursor -> SplitModel v -> Error) -> (SplitMeta v -> Result Error (SplitMeta v)) -> Cursor -> SplitModel v -> Result Error (SplitModel v)
+attemptNodeMetaOpAt err fn c v =
+    let
+        ffn vv =
+            attemptNodeMetaOp (err c) fn vv
+    in
+        foldWithStepInto ffn c v
+
+
+mapNodeMetaAt : String -> (SplitMeta v -> SplitMeta v) -> Cursor -> SplitModel v -> Result Error (SplitModel v)
+mapNodeMetaAt errLabel fn c v =
+    let
+        err c v =
+            Error.makeMsg [ "Cannot", errLabel, "for cursor:", toString c, "in node:", toString v ]
+
+        ffn vv =
+            mapNodeMetaOp (err c) fn vv
+    in
+        foldWithStepInto ffn c v
+
+
+
+-- SPECIALIZED FOLDS FOR NODE META
+
+
+{-| operate on the tip of the cursor and return a SplitView Result
+-}
+foldViewAndCursor : (ViewAndCursor v -> Result Error (ViewAndCursor v)) -> Cursor -> SplitModel v -> UpdateResult v
+foldViewAndCursor fn c v =
+    Bsp.Cursor.foldCursor fn stepIntoViewAndCursor ( c, v ) c
+
+
+andThenCleanTree : Result x (ViewAndCursor v) -> Result x (ViewAndCursor v)
+andThenCleanTree r =
+    Result.map (\( cc, v ) -> ( cc, cleanTree v )) r
+
+
+
+-- BSP VIEW TREE OPERATIONS ----------------------------------------------------
+
+
+splitAtCursor : Direction -> Ratio -> v -> Cursor -> SplitModel v -> Result Error ( Cursor, SplitModel v )
+splitAtCursor direction ratio id cursor node =
+    let
+        splitInner ( c, v ) =
+            case v of
+                Empty ->
+                    Ok <| ( c, leaf id )
+
+                _ ->
+                    Ok <| ( CRight c, binary direction ratio v <| leaf id )
+    in
+        foldViewAndCursor splitInner cursor node
+
+
+
 -- OPERATIONS WITH CURSORS -----------------------------------------------------
 
 
@@ -318,28 +306,29 @@ stepIntoViewAndCursor dir r =
 -}
 swapABAtCursor : Cursor -> SplitModel v -> Result Error (SplitModel v)
 swapABAtCursor c v =
-    let
-        err c v =
-            Error.makeMsg [ "Cannot flip node at:", toString c, "in", toString v ]
+    mapNodeMetaAt "swap A / B" swapABMeta c v
 
-        flipFn v =
-            swapNodeAB v |> Result.fromMaybe (err c v)
-    in
-        Bsp.Cursor.foldCursor flipFn stepIntoSplitView v c
+
+
+-- DIRECTION
 
 
 {-| Sets the direction of a split
 -}
 setDirectionAtCursor : Direction -> Cursor -> SplitModel v -> Result Error (SplitModel v)
 setDirectionAtCursor d c v =
-    let
-        err c v =
-            Error.makeMsg [ "Cannot flip node at:", toString c, "in", toString v ]
+    mapNodeMetaAt "set split direction" (\n -> { n | direction = d }) c v
 
-        fn v =
-            mapNodeMetaOp (err c) (\n -> { n | direction = d }) v
-    in
-        Bsp.Cursor.foldCursor fn stepIntoSplitView v c
+
+
+-- RATIO
+
+
+{-| Sets the direction of a split
+-}
+setRatioAt : Ratio -> Cursor -> SplitModel v -> Result Error (SplitModel v)
+setRatioAt ratio c v =
+    mapNodeMetaAt "set split ratio" (\n -> { n | ratio = ratio }) c v
 
 
 
@@ -350,15 +339,8 @@ setDirectionAtCursor d c v =
 -}
 deleteAtCursor : Cursor -> SplitModel v -> UpdateResult v
 deleteAtCursor c v =
-    let
-        err c v =
-            Error.makeMsg [ "Cannot find node at:", toString c, "in", toString v ]
-
-        fn ( cc, v ) =
-            Ok ( CHead, Empty )
-    in
-        Bsp.Cursor.foldCursor fn stepIntoViewAndCursor ( c, v ) c
-            |> Result.map (\( cc, v ) -> ( cc, cleanTree v ))
+    foldViewAndCursor (always <| Ok ( CHead, Empty )) c v
+        |> andThenCleanTree
 
 
 {-| Cleans the tree be merging Empty leaves with leafs and nodes
@@ -367,25 +349,18 @@ cleanTree : SplitModel v -> SplitModel v
 cleanTree v =
     case v of
         Node nm ->
-            let
-                a =
-                    cleanTree nm.a
+            case ( cleanTree nm.a, cleanTree nm.b ) of
+                ( Empty, Empty ) ->
+                    Empty
 
-                b =
-                    cleanTree nm.b
-            in
-                case ( a, b ) of
-                    ( Empty, Empty ) ->
-                        Empty
+                ( aa, Empty ) ->
+                    aa
 
-                    ( _, Empty ) ->
-                        a
+                ( Empty, bb ) ->
+                    bb
 
-                    ( Empty, _ ) ->
-                        b
-
-                    _ ->
-                        Node { nm | a = a, b = b }
+                ( aa, bb ) ->
+                    Node { nm | a = aa, b = bb }
 
         _ ->
             v
@@ -463,6 +438,10 @@ rotateAtCursor dir c v =
                 |> Result.map (\v -> ( cc, v ))
     in
         Bsp.Cursor.foldCursor fn stepIntoViewAndCursor ( c, v ) c
+
+
+
+-- TO STRING HELPERS -----------------------------------------------------------
 
 
 nodeToString : SplitModel v -> String

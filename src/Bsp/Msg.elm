@@ -6,6 +6,7 @@ module Bsp.Msg exposing (..)
 -- MSG -------------------------------------------------------------------------
 
 import Bsp.Cursor exposing (Cursor)
+import Bsp.Ratio exposing (Ratio)
 import Bsp.SplitView exposing (Direction)
 
 
@@ -23,6 +24,8 @@ type Msg msg local
     | SwapLR Cursor
     | Rotate Bsp.SplitView.RotateDirection Cursor
     | RotateParent Bsp.SplitView.RotateDirection Cursor
+
+    | ResizeAt Ratio Cursor
 
 
 

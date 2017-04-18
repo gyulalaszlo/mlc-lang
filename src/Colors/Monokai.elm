@@ -5,6 +5,9 @@ module Colors.Monokai exposing (..)
 import Color exposing (Color, rgb)
 
 
+darkBlack : Color
+darkBlack = rgb 0x13 0x14 0x11
+
 black : Color
 black = rgb 0x27 0x28 0x22
 

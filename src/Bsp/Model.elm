@@ -17,7 +17,8 @@ module Bsp.Model
 
 import Bsp.Cursor exposing (Cursor(..))
 import Bsp.Msg exposing (Id, LayoutEditingMode(EditingLayoutBlocks, NotEditingLayout), Msg(ChildMsg))
-import Bsp.SplitView exposing (Direction(..), Ratio(..), SplitMeta, SplitModel(..), binary, leaf, splitAtCursor)
+import Bsp.Ratio exposing (Ratio)
+import Bsp.SplitView exposing (Direction(..), SplitMeta, SplitModel(..), binary, leaf, splitAtCursor)
 import Bsp.Traits exposing (LocalModel, NodeViewBaseTraits, SharedModel, Traits)
 import Error exposing (Error)
 import Dict exposing (Dict)

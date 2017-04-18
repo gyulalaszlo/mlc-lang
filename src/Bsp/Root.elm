@@ -15,7 +15,8 @@ import Html.Attributes exposing (class, style)
 import Bsp.Model exposing (..)
 import Bsp.Msg exposing (..)
 import Bsp.Traits exposing (..)
-import Bsp.SplitView exposing (Direction(Horizontal, Vertical), SplitModel(Empty, Leaf, Node), Ratio, SplitMeta, binary, directionToString, leaf)
+import Bsp.Ratio exposing (Ratio(..))
+import Bsp.SplitView exposing (Direction(Horizontal, Vertical), SplitModel(Empty, Leaf, Node), SplitMeta, binary, directionToString, leaf)
 import Dict exposing (Dict)
 import Error exposing (Error)
 import Html.Events exposing (onClick)
@@ -44,7 +45,7 @@ update msg model =
             { model | cursor = c } ! []
 
         SplitAt c d l ->
-            ( insertAt c d Bsp.SplitView.Equal l model
+            ( insertAt c d Equal l model
             , Cmd.none
             )
 
@@ -74,6 +75,11 @@ update msg model =
 
         DeleteAt c ->
             fromUpdateResult Bsp.SplitView.deleteAtCursor c model
+
+        ResizeAt r c ->
+            Bsp.SplitView.setRatioAt r c model.rootView
+                |> Result.map (\v -> ( { model | rootView = v }, Cmd.none ))
+                |> Result.withDefault ( model, Cmd.none )
 
 
 {-| do an `update()` using an update function
@@ -213,30 +219,18 @@ prefixedClasses s ss =
     let prefix v = s ++ "-" ++ v
     in class <| String.join " " <| s :: (List.map prefix ss)
 
-classes : List String -> Html.Attribute msg
-classes ss =
-    class <| String.join " " (List.map (String.join "-") <| List.Extra.inits ss)
-
-
-bspClasses : String -> List String -> Html.Attribute msg
-bspClasses static ss =
-    classes <| ("bsp-view-" ++ static) :: ss
-
-
-bspClassesFor : String -> List String -> List String -> Html.Attribute msg
-bspClassesFor static prefixes ss =
-    bspClasses static <| prefixes ++ ss
-
 
 splitSize : Ratio -> ( Float, Float )
 splitSize r =
     case r of
-        Bsp.SplitView.Equal ->
+        Equal ->
             ( 50, 50 )
 
-        _ ->
-            ( 50, 50 )
+        FixedA v ->
+            ( min 95 v, max 5 (100 - v) )
 
+        FixedB v ->
+            (  max 5 (100 - v), min 95 v )
 
 {-| Returns the 'style' attribute for the left and right side for the given
 Direction and Ratio.

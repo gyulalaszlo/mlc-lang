@@ -3,7 +3,7 @@ module Bsp.Cursor
         ( Cursor(..)
         , CursorFn
         , parentCursor
-        , BspStep(..)
+        , BspStep(..), BStepFn, StepFn
         , foldCursor
         , at
         )
@@ -55,7 +55,22 @@ parentCursor c =
 
 at : BStepFn x v -> Cursor -> v -> Result x v
 at into c v =
-    foldCursor Ok into v c
+    let
+        stepInto cc ( vv, _ ) =
+            at into cc vv
+
+        stepIntoDirection dir cc =
+            into dir v |> Result.andThen (stepInto cc)
+    in
+        case c of
+            CHead ->
+                Ok v
+
+            CLeft cc ->
+                stepIntoDirection Left cc
+
+            CRight cc ->
+                stepIntoDirection Right cc
 
 
 type alias StepFn x s v =
