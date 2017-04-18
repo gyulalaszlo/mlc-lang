@@ -12,7 +12,9 @@ import Array exposing (Array)
 import Bsp.Cursor exposing (..)
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (class, style)
-import Bsp.RootModel exposing (..)
+import Bsp.Model exposing (..)
+import Bsp.Msg exposing (..)
+import Bsp.Traits exposing (..)
 import Bsp.SplitView exposing (Direction(Horizontal, Vertical), SplitModel(Empty, Leaf, Node), Ratio, SplitMeta, binary, directionToString, leaf)
 import Dict exposing (Dict)
 import Error exposing (Error)
@@ -50,7 +52,7 @@ update msg model =
             { model | layoutEditingMode = m } ! []
 
         SwapLR c ->
-            Bsp.SplitView.swapAtCursor c model.rootView
+            Bsp.SplitView.swapABAtCursor c model.rootView
                 |> Result.map (\v -> ( { model | rootView = v }, Cmd.none ))
                 |> Result.withDefault ( model, Cmd.none )
 
@@ -59,10 +61,28 @@ update msg model =
                 |> Result.map (\v -> ( { model | rootView = v }, Cmd.none ))
                 |> Result.withDefault ( model, Cmd.none )
 
-        Rotate c d ->
-            Bsp.SplitView.rotateAtCursor d c model.rootView
-                |> Result.map (\( c, v ) -> ( { model | rootView = v, cursor = c }, Cmd.none ))
-                |> Result.withDefault ( model, Cmd.none )
+        Rotate d c ->
+            fromUpdateResult (Bsp.SplitView.rotateAtCursor d) c model
+
+        RotateParent d c ->
+            case Bsp.Cursor.parentCursor c of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just cc ->
+                    fromUpdateResult (Bsp.SplitView.rotateAtCursor d) cc model
+
+        DeleteAt c ->
+            fromUpdateResult Bsp.SplitView.deleteAtCursor c model
+
+
+{-| do an `update()` using an update function
+-}
+fromUpdateResult : (Cursor -> SplitModel Id -> Result Error ( Cursor, SplitModel Id )) -> Cursor -> Model m l s -> ( Model m l s, Cmd (Msg m l) )
+fromUpdateResult updateFn cursor model =
+    updateFn cursor model.rootView
+        |> Result.map (\( c, v ) -> ( { model | rootView = v, cursor = c }, Cmd.none ))
+        |> Result.withDefault ( model, Cmd.none )
 
 
 
@@ -71,91 +91,19 @@ update msg model =
 
 view : Model m l s -> Html (Msg m l)
 view model =
-    case model.layoutEditingMode of
-        NotEditingLayout ->
-            normalView model
-
-        EditingLayoutBlocks ->
-            layoutEditingView model
-
-
-normalView : Model m l s -> Html (Msg m l)
-normalView model =
-    div [ class "bsp-root-view" ]
-        [ splitWrapper
-            [ "root" ]
-            [ treeSubView model identity model.rootView ]
-        ]
-
-
-layoutEditingView : Model m l s -> Html (Msg m l)
-layoutEditingView model =
-    div [ class "bsp-root-view bsp-root-view-edited" ]
-        [ model.traits.toolbars.globalLayoutEditor model.cursor model.shared
-        , splitWrapper
-            [ "root", "edited" ]
-            [ layoutEditingTreeSubView model identity model.rootView ]
-        ]
-
-
-
--- VIEW: treeSubView
-
-
-{-| the view of a tree node or leaf or empty node
--}
-layoutEditingTreeSubView : Model m l s -> (Cursor -> Cursor) -> SplitModel Id -> Html (Msg m l)
-layoutEditingTreeSubView model cursorFn node =
     let
-        recur =
-            layoutEditingTreeSubView model
+        globalToolbar =
+            case model.layoutEditingMode of
+                NotEditingLayout ->
+                    model.traits.toolbars.normal
 
-        cursor =
-            cursorFn CHead
-
-        { traits, shared } =
-            model
-
-        isSelected =
-            model.cursor == cursor
-
-        wrapper cls els =
-            wrapperWithSelection model cursor ("editing-layout" :: cls) els
+                EditingLayoutBlocks ->
+                    model.traits.toolbars.layoutEditing
     in
-        case node of
-            Bsp.SplitView.Node meta ->
-                wrapper [ "node", directionToString meta.direction ] <|
-                    layoutEditingSplitView model cursorFn meta
-
-            Bsp.SplitView.Leaf id ->
-                localModelFor cursor id model
-                    |> Maybe.map
-                        (\mdl ->
-                            [ (if isSelected then
-                                model.traits.toolbars.leafSelectedLayoutEditing
-                               else
-                                model.traits.toolbars.leafLayoutEditing
-                              )
-                                cursor
-                                id
-                                mdl.local
-                                model.shared
-                            ]
-                        )
-                    |> Maybe.withDefault [ text "Cannot find view" ]
-                    |> wrapper [ "leaf" ]
-
-            Bsp.SplitView.Empty ->
-                wrapper [ "empty" ]
-                    [ traits.empty cursor model.shared
-                    ]
-
-
-{-| split view
--}
-layoutEditingSplitView : Model m l s -> (Cursor -> Cursor) -> SplitMeta Id -> List (Html (Msg m l))
-layoutEditingSplitView model cursorFn meta =
-    splitViewBase model.traits.toolbars.splitLayoutEditing layoutEditingTreeSubView model cursorFn meta
+        div [ class "bsp-root-view" ]
+            [ globalToolbar.global model.shared (localModelAt model.cursor model)
+            , splitWrapper [ "root" ] [ treeSubView model identity model.rootView ]
+            ]
 
 
 
@@ -173,64 +121,46 @@ treeSubView model cursorFn node =
         cursor =
             cursorFn CHead
 
-        { traits, shared } =
-            model
-
         wrapper cls els =
             wrapperWithSelection model cursor cls els
+
+        nodeViewBaseTraits =
+            nodeViewBaseTraitsFor cursor model
     in
         case node of
             Bsp.SplitView.Node meta ->
-                wrapper [ "node", directionToString meta.direction ] <|
-                    splitView model cursorFn meta
+                let
+                    { a, b, direction, ratio } =
+                        meta
+
+                    ( l, r ) =
+                        splitAttrs direction ratio
+
+
+                    nodeDiv v style dir el =
+                        div [ prefixedClasses "node" [ "split", directionToString direction, v ]
+                            , style
+                            ]
+                            [ recur (cursorFn << dir) el ]
+                in
+                    nodeViewBaseTraits.split (sharedModelFor cursorFn meta model.shared) <|
+                        wrapper [ "node", directionToString direction ] <|
+                            [ nodeDiv "a" l CLeft a --<| recur (cursorFn << CLeft) a -- div [ classFor [ "a" ], l ] [ recur (cursorFn << CLeft) a ]
+                            , nodeDiv "b" r CRight b --<| recur (cursorFn << CLeft) b -- div [ classFor [ "a" ], l ] [ recur (cursorFn << CLeft) a ]
+--                            , div [ classFor [ "b" ], r ] [ recur (cursorFn << CRight) b ]
+                            ]
 
             Bsp.SplitView.Leaf id ->
                 wrapper [ "leaf" ]
                     [ localModelFor cursor id model
-                        |> Maybe.map (\mdl -> traits.view mdl)
+                        |> Maybe.map (\mdl -> nodeViewBaseTraits.leaf model.traits.view mdl)
                         |> Maybe.withDefault (text "Cannot find local for view")
                     ]
 
             Bsp.SplitView.Empty ->
                 wrapper [ "empty" ]
-                    [ traits.empty cursor model.shared
+                    [ nodeViewBaseTraits.empty cursor model.shared
                     ]
-
-
-{-| split view
--}
-splitView : Model m l s -> (Cursor -> Cursor) -> SplitMeta Id -> List (Html (Msg m l))
-splitView model cursorFn meta =
-    splitViewBase model.traits.toolbars.split treeSubView model cursorFn meta
-
-
-{-| split view
--}
-splitViewBase :
-    ((Cursor -> Cursor) -> SplitMeta Id -> s -> Html (Msg m l))
-    -> (Model m l s -> (Cursor -> Cursor) -> SplitModel Id -> Html (Msg m l))
-    -> Model m l s
-    -> (Cursor -> Cursor)
-    -> SplitMeta Id
-    -> List (Html (Msg m l))
-splitViewBase toolbar recur model cursorFn meta =
-    let
-        { a, b, ratio, direction } =
-            meta
-
-        cursor =
-            cursorFn CHead
-
-        ( l, r ) =
-            splitAttrs direction ratio
-
-        classFor =
-            bspClassesFor "node" [ "split", directionToString direction ]
-    in
-        [ div [ classFor [ "a" ], l ] [ recur model (cursorFn << CLeft) a ]
-        , div [ classFor [ "b" ], r ] [ recur model (cursorFn << CRight) b ]
-        , div [ classFor [ "toolbar" ] ] [ toolbar cursorFn meta model.shared ]
-        ]
 
 
 
@@ -243,10 +173,16 @@ wrapperWithSelection : Model m l s -> Cursor -> List String -> List (Html msg) -
 wrapperWithSelection model cursor classArgs els =
     let
         classBits =
-            if (model.cursor == cursor) then
-                classArgs ++ [ "selected" ]
-            else
-                classArgs
+            classArgs
+                ++ [ if (model.cursor == cursor) then
+                        "selected"
+                     else
+                        "not-selected"
+                   , case model.layoutEditingMode of
+                       EditingLayoutBlocks -> "editing"
+                       NotEditingLayout -> "not-editing"
+                   ]
+
     in
         splitWrapper classBits els
 
@@ -256,9 +192,10 @@ wrapperWithSelection model cursor classArgs els =
 splitWrapper : List String -> List (Html msg) -> Html msg
 splitWrapper classArgs els =
     div
-        [ bspClasses "split-wrapper" classArgs
+        [ prefixedClasses "bsp-view-split-wrapper" classArgs
         , style
             [ ( "position", "absolute" )
+            , ( "overflow", "hidden" )
             , ( "left", "0" )
             , ( "right", "0" )
             , ( "top", "0" )
@@ -271,6 +208,11 @@ splitWrapper classArgs els =
 
 -- VIEW: splitView
 
+
+prefixedClasses : String -> List String -> Html.Attribute msg
+prefixedClasses s ss =
+    let prefix v = s ++ "-" ++ v
+    in class <| String.join " " <| s :: (List.map prefix ss)
 
 classes : List String -> Html.Attribute msg
 classes ss =

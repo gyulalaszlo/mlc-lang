@@ -5,6 +5,7 @@ module Bsp.Cursor
         , parentCursor
         , BspStep(..)
         , foldCursor
+        , at
         )
 
 {-| Describe me please...
@@ -52,19 +53,17 @@ parentCursor c =
             Nothing
 
 
-{-|
--}
---type alias CursorTraits s v =
---    { into : CursorBase s -> v -> Result  ( CursorBase s, v )
---    , outOf : CursorBase s -> v -> Maybe ( CursorBase s, v )
---    }
+at : BStepFn x v -> Cursor -> v -> Result x v
+at into c v =
+    foldCursor Ok into v c
 
 
 type alias StepFn x s v =
     s -> v -> Result x ( v, v -> v )
 
 
-type alias BStepFn x v = StepFn x BspStep v
+type alias BStepFn x v =
+    StepFn x BspStep v
 
 
 foldCursor : (v -> Result x v) -> BStepFn x v -> v -> Cursor -> Result x v
@@ -85,15 +84,3 @@ foldCursor head into v c =
 
             CRight cc ->
                 stepIntoDirection Right cc
-
-
-
---    let recur f c = foldCursor head left right (f v) c
---    in case c of
---        CLeft cc ->
---            left
---            recur left cc
---        CRight cc ->
---            recur right cc
---        CHead ->
---            head v

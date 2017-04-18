@@ -3,9 +3,11 @@ module Bsp.Test exposing (main)
 -}
 import Bsp.Cursor exposing (parentCursor)
 import Bsp.DefaultTheme
-import Bsp.RootModel exposing (LayoutEditingMode(EditingLayoutBlocks), LocalModel, Model, Msg(..), modelFrom)
+import Bsp.Msg exposing (Msg(..), LayoutEditingMode(..))
+import Bsp.Traits exposing (LocalModel, SharedModel)
+import Bsp.Model exposing (Model, modelFrom)
 import Bsp.Root exposing (subscriptions, update, view)
-import Bsp.SplitView exposing (Direction(Horizontal, Vertical))
+import Bsp.SplitView exposing (Direction(Horizontal, Vertical), RotateDirection(CCW, CW))
 import Colors.Monokai
 import Css
 import Html exposing (Html, text)
@@ -14,7 +16,7 @@ import Html.Events exposing (onClick)
 import MLC.Cursor exposing (Cursor)
 import Task
 
-type alias Msg = Bsp.RootModel.Msg ChildMsg ChildModel
+type alias Msg = Bsp.Msg.Msg ChildMsg ChildModel
 type alias Model = LocalModel ChildMsg ChildModel Int
 --type alias Model = Bsp.Root.Model ChildMsg ChildModel Int
 
@@ -61,7 +63,7 @@ bspTraits =
     , empty = empty
 --    , leafToolbar = leafToolbar
 --    , splitToolbar = splitToolbar
-    , toolbars = Bsp.DefaultTheme.toolbarTraits childLabel
+    , toolbars = Bsp.DefaultTheme.toolbarTraits childLabel [A,B]
     }
 
 
@@ -85,6 +87,7 @@ childView {local, shared, cursor, msg} =
             Html.div []
                 [ Html.text  "AAAA"
                 , leafToolbar cursor
+                , Html.pre [] [ text Bsp.DefaultTheme.css ]
                 ]
 
         B ->
@@ -104,25 +107,30 @@ empty cursor _ =
         , Html.button [ onClick <| SplitAt cursor Horizontal B ] [ text "-> B" ]
         ]
 
+btn v label =
+    Html.button
+        [ onClick  v ]
+        [ text label ]
 
-btn cursor direction v label =
+sbtn cursor direction v label =
     Html.button
         [ onClick <| SplitAt cursor direction v ]
         [ text label ]
 
 
-hbtn cursor = btn cursor Horizontal
-vbtn cursor = btn cursor Vertical
+hbtn cursor = sbtn cursor Horizontal
+vbtn cursor = sbtn cursor Vertical
 
 --leafToolbar : (ChildMsg -> Msg) -> Cursor -> ChildModel -> Int -> Html Msg
 leafToolbar c =
      Html.div []
-        [ Html.button [onClick <| Select c] [ text <| "SELECT" ]
-        , Html.button [onClick <| SetLayoutEditingMode EditingLayoutBlocks] [ text <| "LAYOUT" ]
+        [ Html.button [onClick <| Select c] [ text <| "." ]
         , hbtn c A "|| A"
         , hbtn c B "|| B"
         , vbtn c A "-- A"
         , vbtn c B "-- B"
+        , btn (RotateParent CW c) <| "<-R"
+        , btn (RotateParent CCW c) <| "R->"
 --        , parentCursor c
 --            |> Maybe.map (\cc ->
 --                Html.button [onClick <| Select cc ] [ text <| "Parent" ++ toString cc  ])

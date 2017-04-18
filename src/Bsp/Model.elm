@@ -1,16 +1,13 @@
-module Bsp.RootModel
+module Bsp.Model
     exposing
         ( Model
-        , LocalModel
-        , ToolbarTraits
-        , Traits
-        , Msg(..)
-        , Id
         , nextId
         , insertAt
         , modelFrom
         , localModelFor
-        , LayoutEditingMode(..)
+        , sharedModelFor
+        , localModelAt
+        , nodeViewBaseTraitsFor
         )
 
 {-| Describe me please...
@@ -19,14 +16,12 @@ module Bsp.RootModel
 -- ID --------------------------------------------------------------------------
 
 import Bsp.Cursor exposing (Cursor(..))
+import Bsp.Msg exposing (Id, LayoutEditingMode(EditingLayoutBlocks, NotEditingLayout), Msg(ChildMsg))
 import Bsp.SplitView exposing (Direction(..), Ratio(..), SplitMeta, SplitModel(..), binary, leaf, splitAtCursor)
+import Bsp.Traits exposing (LocalModel, NodeViewBaseTraits, SharedModel, Traits)
 import Error exposing (Error)
 import Dict exposing (Dict)
 import Html exposing (Html)
-
-
-type alias Id =
-    Int
 
 
 nextId : Id -> Id
@@ -38,14 +33,6 @@ nextId old =
 -- MODEL & CONSTRUCTORS --------------------------------------------------------
 
 
-type alias LocalModel msg local shared =
-    { local : local
-    , shared : shared
-    , cursor : Cursor
-    , msg : msg -> Msg msg local
-    }
-
-
 type alias Model msg local shared =
     { shared : shared
     , locals : Dict Id local
@@ -54,24 +41,7 @@ type alias Model msg local shared =
     , cursor : Cursor
     , nextId : Id
     , layoutEditingMode : LayoutEditingMode
-    }
-
-
-type alias ToolbarTraits msg local shared =
-    { split : (Cursor -> Cursor ) -> SplitMeta Id -> shared -> Html (Msg msg local)
-    , splitLayoutEditing : (Cursor -> Cursor) -> SplitMeta Id -> shared -> Html (Msg msg local)
-    , leafLayoutEditing : Cursor -> Id -> local -> shared -> Html (Msg msg local)
-    , leafSelectedLayoutEditing : Cursor -> Id -> local -> shared -> Html (Msg msg local)
-    , globalLayoutEditor : Cursor -> shared -> Html (Msg msg local)
-    }
-
-
-type alias Traits msg local shared =
-    { subscriptions : LocalModel msg local shared -> Sub msg
-    , update : msg -> LocalModel msg local shared -> ( local, shared, Cmd (Msg msg local) )
-    , view : LocalModel msg local shared -> Html (Msg msg local)
-    , empty : Cursor -> shared -> Html (Msg msg local)
-    , toolbars : ToolbarTraits msg local shared
+    , selectedLeaf : Maybe Id
     }
 
 
@@ -86,6 +56,7 @@ modelFrom traits shared =
     , cursor = CHead
     , nextId = 0
     , layoutEditingMode = NotEditingLayout
+    , selectedLeaf = Nothing
     }
 
 
@@ -94,33 +65,48 @@ modelFrom traits shared =
 localModelFor : Cursor -> Id -> Model m l s -> Maybe (LocalModel m l s)
 localModelFor cursor id { locals, shared } =
     Dict.get id locals
-        |> Maybe.map (\local -> LocalModel local shared cursor (ChildMsg id))
+        |> Maybe.map (\local -> LocalModel local shared cursor id (ChildMsg id))
 
 
+localModelAt : Cursor -> Model m l s -> Result Error (LocalModel m l s)
+localModelAt c model =
+    let
+        err id =
+            Error.makeMsg [ "Cannot find model for id:", toString id, "for cursor:", toString c ]
 
--- MSG -------------------------------------------------------------------------
+        localModelForId id =
+            localModelFor model.cursor id model
+                |> Result.fromMaybe (err id)
 
-
-type Msg msg local
-    = ChildMsg Id msg
-    | Select Cursor
-    | SplitAt Cursor Direction local
-    | SetLayoutEditingMode LayoutEditingMode
-    | SetDirection Cursor Direction
-    | SwapLR Cursor
-
-    | Rotate Cursor Bsp.SplitView.RotateDirection
-
-
-
--- LAYOUT EDITING MODES --------------------------------------------------------
+        localView =
+            Bsp.SplitView.valueAt model.cursor model.rootView
+                |> Result.andThen localModelForId
+    in
+        localView
 
 
-{-| What kind of layout editing mode are we in
+sharedModelFor : (Cursor -> Cursor) -> SplitMeta Id -> s -> SharedModel s
+sharedModelFor cFn meta s =
+    { shared = s, cursor = cFn, meta = meta }
+
+
+{-|
 -}
-type LayoutEditingMode
-    = NotEditingLayout
-    | EditingLayoutBlocks
+nodeViewBaseTraitsFor : Cursor -> Model m l s -> NodeViewBaseTraits m l s
+nodeViewBaseTraitsFor c model =
+    let
+        toolbar =
+            case model.layoutEditingMode of
+                NotEditingLayout ->
+                    model.traits.toolbars.normal
+
+                EditingLayoutBlocks ->
+                    model.traits.toolbars.layoutEditing
+    in
+        if model.cursor == c then
+            toolbar.selected
+        else
+            toolbar.normal
 
 
 
@@ -129,7 +115,6 @@ type LayoutEditingMode
 
 type alias ViewNode =
     SplitModel Id
-
 
 
 insertLocal : l -> Model m l s -> Model m l s
