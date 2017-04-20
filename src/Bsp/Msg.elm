@@ -16,6 +16,7 @@ type alias Id =
 
 type Msg msg local
     = ChildMsg Id msg
+    | SharedMsg msg
     | Select Cursor
     | DeleteAt Cursor
     | SplitAt Cursor Direction local

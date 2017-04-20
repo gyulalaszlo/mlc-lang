@@ -29,8 +29,8 @@ import Html.Keyed
 
 
 
-normalTheme : (l -> String) -> List l -> NodeViewWrapper m l s
-normalTheme labelFn empties ctx viewToWrap =
+normalTheme : (s -> Html m) -> (l -> String) -> List l -> NodeViewWrapper m l s
+normalTheme toolbarFn labelFn empties ctx viewToWrap =
     case viewToWrap of
         WrappedLeaf { model, view } -> normalThemeLeaf labelFn ctx view model
 
@@ -41,7 +41,8 @@ normalTheme labelFn empties ctx viewToWrap =
 
         WrappedEmpty empty -> emptyBase labelFn empties empty
 
-        WrappedGlobal global -> normalThemeToolbar labelFn empties ctx global
+        WrappedGlobal global ->
+            normalThemeToolbar toolbarFn labelFn empties ctx global
 
 
 
@@ -56,9 +57,10 @@ emptyBase labelFn empties {cursor} =
 
 
 
-normalThemeToolbar labelFn empties ctx {rootView, cursor, shared, selectedLeafId, selectedLeafModel} =
+normalThemeToolbar toolbarFn labelFn empties ctx {rootView, cursor, shared, selectedLeafId, selectedLeafModel} =
     div [ class "global-toolbar" ]
-        [ case ctx.edited of
+        [ Html.map SharedMsg <| toolbarFn shared
+        , case ctx.edited of
             WrappedNotEditing -> btn (SetLayoutEditingMode EditingLayoutBlocks) "Edit layout"
             WrappedIsEditing -> btn (SetLayoutEditingMode NotEditingLayout) "Done"
         , text " | "

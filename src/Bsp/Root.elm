@@ -41,6 +41,10 @@ update msg model =
         ChildMsg id m ->
             model ! []
 
+        SharedMsg m ->
+            
+            model ! []
+
         Select c ->
             { model | cursor = c } ! []
 
