@@ -1,0 +1,3 @@
+[submodule "vendor/elm-bspview"]
+	path = vendor/elm-bspview
+	url = git@github.com:gyulalaszlo/elm-bspview.git
