@@ -1,4 +1,4 @@
-module Qnject.QAppView exposing
+module Qnject.Viewers.QAppView exposing
     ( Model
     , initialModel
     
@@ -14,7 +14,10 @@ module Qnject.QAppView exposing
 
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class)
-import Qnject.Qobject exposing (QApp, QObject)
+import Html.Events exposing (onClick)
+import Qnject.Qobject exposing (Address, QApp, QObject)
+import Qnject.ViewerEffects exposing (Effects(OpenObjectView))
+
 
 
 -- MODEL
@@ -44,7 +47,7 @@ contextFrom = Context
 
 
 type Msg
-    = Noop
+    = OpenAddress Address
 
 
 
@@ -60,10 +63,10 @@ subscriptions model =
 -- UPDATE
 
 
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg -> Model -> (Model, Cmd Msg, Maybe Effects)
 update msg model =
     case msg of
-        Noop -> model ! []
+        OpenAddress addr -> (model, Cmd.none, Just <| OpenObjectView addr)
 
 
 -- VIEW
@@ -151,9 +154,9 @@ qobjectTableRow  model obj =
         , class <| "qobject-kind-" ++ toString obj.objectKind
         ]
         [ Html.td [ class "object-name" ] [ text obj.objectName ]
-        , Html.td [ class "class-name" ] [ text obj.className ]
+        , Html.td [ class "class-name"] [ text obj.className ]
         , Html.td [ class "super-class" ] [ text obj.superClass ]
-        , Html.td [ class "address" ] [ text obj.address ]
+        , Html.td [ class "address", onClick <| OpenAddress obj.address ] [ text obj.address ]
         ]
 
 {-| CSS parts for qobjectTableRow

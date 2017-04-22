@@ -26,7 +26,7 @@ import List.Extra
 -- SUBSCRIPTIONS
 
 
-subscriptions : Model m l s -> Sub (Msg m l)
+subscriptions : Model m l s e -> Sub (Msg m l)
 subscriptions model =
     Sub.none
 
@@ -35,16 +35,33 @@ subscriptions model =
 -- UPDATE
 
 
-update : Msg m l -> Model m l s -> ( Model m l s, Cmd (Msg m l) )
+update : Msg m l -> Model m l s e -> ( Model m l s e, Cmd (Msg m l), Maybe e )
 update msg model =
     case msg of
         ChildMsg id m ->
-            model ! []
+            localModelFor CHead id model
+                |> Maybe.map (\local -> model.traits.update m local)
+                |> Maybe.map (\(cm, cc, ce) ->
+                    ( { model | locals = (Dict.insert id cm model.locals)}
+                    , cc
+--                    , Cmd.map (ChildMsg id) cc
+                    , ce
+                    ))
+                |> Maybe.withDefault (model, Cmd.none, Nothing)
+--            model ! []
 
         SharedMsg m ->
-            
-            model ! []
 
+             (model, Cmd.none, Nothing)
+
+        _ -> let
+
+                (m,c) = updateBspOp msg model
+             in (m, c, Nothing)
+
+updateBspOp : Msg m l -> Model m l s e -> ( Model m l s e, Cmd (Msg m l) )
+updateBspOp msg model =
+    case msg of
         Select c ->
             { model | cursor = c } ! []
 
@@ -85,10 +102,12 @@ update msg model =
                 |> Result.map (\v -> ( { model | rootView = v }, Cmd.none ))
                 |> Result.withDefault ( model, Cmd.none )
 
+        _ -> Debug.crash "Cannot parse msg"
+
 
 {-| do an `update()` using an update function
 -}
-fromUpdateResult : (Cursor -> SplitModel Id -> Result Error ( Cursor, SplitModel Id )) -> Cursor -> Model m l s -> ( Model m l s, Cmd (Msg m l) )
+fromUpdateResult : (Cursor -> SplitModel Id -> Result Error ( Cursor, SplitModel Id )) -> Cursor -> Model m l s e -> ( Model m l s e, Cmd (Msg m l) )
 fromUpdateResult updateFn cursor model =
     updateFn cursor model.rootView
         |> Result.map (\( c, v ) -> ( { model | rootView = v, cursor = c }, Cmd.none ))
@@ -99,7 +118,7 @@ fromUpdateResult updateFn cursor model =
 -- VIEW
 
 
-view : Model m l s -> Html (Msg m l)
+view : Model m l s e -> Html (Msg m l)
 view model =
     let
         context =
@@ -128,7 +147,7 @@ view model =
 
 {-| the view of a tree node or leaf or empty node
 -}
-treeSubView : Model m l s -> (Cursor -> Cursor) -> SplitModel Id -> Html (Msg m l)
+treeSubView : Model m l s e -> (Cursor -> Cursor) -> SplitModel Id -> Html (Msg m l)
 treeSubView model cursorFn node =
     let
         recur =
@@ -190,13 +209,13 @@ treeSubView model cursorFn node =
 -- wrapper fns
 
 
-emptyFor : WrappedContext -> Cursor -> Model m l s -> Html (Msg m l)
+emptyFor : WrappedContext -> Cursor -> Model m l s e -> Html (Msg m l)
 emptyFor context cursor {traits,shared} =
     traits.wrapper context <|
         WrappedEmpty {shared = shared, cursor = cursor}
 
 
-splitFor : WrappedContext -> (Cursor -> Cursor) -> SplitMeta Id -> Model m l s -> Html (Msg m l) -> Html (Msg m l)
+splitFor : WrappedContext -> (Cursor -> Cursor) -> SplitMeta Id -> Model m l s e -> Html (Msg m l) -> Html (Msg m l)
 splitFor context cursorFn meta model el =
     model.traits.wrapper context <|
         WrappedNode
@@ -206,7 +225,7 @@ splitFor context cursorFn meta model el =
             , content = el
             }
 
-leafFor : WrappedContext -> LocalModel m l s -> Model m l s -> Html (Msg m l)
+leafFor : WrappedContext -> LocalModel m l s -> Model m l s e -> Html (Msg m l)
 leafFor context localModel model =
     model.traits.wrapper context <|
         WrappedLeaf
@@ -219,7 +238,7 @@ leafFor context localModel model =
 
 {-| Wraps a BSP view and adds the `selected` class bit if its selected
 -}
-wrapperWithSelection : Model m l s -> Cursor -> List String -> List (Html msg) -> Html msg
+wrapperWithSelection : Model m l s e -> Cursor -> List String -> List (Html msg) -> Html msg
 wrapperWithSelection model cursor classArgs els =
     let
         classBits =

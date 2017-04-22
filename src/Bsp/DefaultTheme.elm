@@ -29,8 +29,8 @@ import Html.Keyed
 
 
 
-normalTheme : (s -> Html m) -> (l -> String) -> List l -> NodeViewWrapper m l s
-normalTheme toolbarFn labelFn empties ctx viewToWrap =
+normalTheme : (l -> String) -> (s -> List l) -> NodeViewWrapper m l s
+normalTheme labelFn empties ctx viewToWrap =
     case viewToWrap of
         WrappedLeaf { model, view } -> normalThemeLeaf labelFn ctx view model
 
@@ -42,25 +42,25 @@ normalTheme toolbarFn labelFn empties ctx viewToWrap =
         WrappedEmpty empty -> emptyBase labelFn empties empty
 
         WrappedGlobal global ->
-            normalThemeToolbar toolbarFn labelFn empties ctx global
+            normalThemeToolbar labelFn empties ctx global
 
 
 
-emptyBase labelFn empties {cursor} =
+emptyBase labelFn empties {cursor, shared} =
     Html.div
         []
         [ Html.Keyed.ul [] <|
             List.indexedMap (\i l-> (toString i, l)) <|
-            List.map (\l -> Html.li [] [ btn (SplitAt cursor Horizontal l) <| labelFn l] ) empties
+            List.map (\l -> Html.li [] [ btn (SplitAt cursor Horizontal l) <| labelFn l] )
+                (empties shared)
         ]
 
 
 
 
-normalThemeToolbar toolbarFn labelFn empties ctx {rootView, cursor, shared, selectedLeafId, selectedLeafModel} =
+normalThemeToolbar labelFn empties ctx {rootView, cursor, shared, selectedLeafId, selectedLeafModel} =
     div [ class "global-toolbar" ]
-        [ Html.map SharedMsg <| toolbarFn shared
-        , case ctx.edited of
+        [ case ctx.edited of
             WrappedNotEditing -> btn (SetLayoutEditingMode EditingLayoutBlocks) "Edit layout"
             WrappedIsEditing -> btn (SetLayoutEditingMode NotEditingLayout) "Done"
         , text " | "
@@ -72,19 +72,26 @@ normalThemeToolbar toolbarFn labelFn empties ctx {rootView, cursor, shared, sele
         ]
 
 
-normalThemeLeaf : (l -> String) -> WrappedContext -> LeafViewFn m l s
 normalThemeLeaf labelFn ctx view model =
     div [ class "normal-leaf" ]
         [ view model
-        , case ctx.selected of
-            WrappedNotSelected ->
-                div [ class "leaf-id" , onClick (Select model.cursor) ]
-                    [ text <| "#" ++ toString model.id ++ " "
-                    , text <| labelFn model.local
-                    ]
-            WrappedIsSelected ->
-                text ""
+        , leafToolbar labelFn ctx view model
         ]
+
+
+leafToolbar labelFn ctx view model =
+    let closeBtn = span [ class "close-button" ] [ btn (DeleteAt model.cursor ) "×" ]
+        label = span [ class "label" ] [ text <| labelFn model.local ]
+        id = span [ class "id" ] [ text <| toString model.id ]
+        leafClass cl = class <| "leaf-id leaf-id-" ++ cl
+        leafAttrs  = case ctx.selected of
+            WrappedNotSelected ->
+                [ leafClass "not-selected", onClick (Select model.cursor) ]
+            WrappedIsSelected ->
+                [ leafClass "selected" ]
+
+    in div leafAttrs [ id , label , closeBtn ]
+
 
 
 -- SPLIT
@@ -153,8 +160,9 @@ normalThemeEditedSplitView ctx cursorFn { a, b, direction, ratio } _ =
 
 -- TOOLBAR --
 
-toolbarLeaf labelFn empties mdl =
-    let {cursor,id, local} = mdl
+toolbarLeaf labelFn emptiesFn mdl =
+    let {cursor,id, local, shared} = mdl
+        empties = emptiesFn shared
     in
         [ List.map (\l -> btn (SplitAt cursor Horizontal l) <| "|| " ++ labelFn l) empties
         , List.map (\l -> btn (SplitAt cursor Vertical l) <| "-- " ++ labelFn l) empties
@@ -308,5 +316,7 @@ css =
 .layout-editing-inner-wrap { position: absolute; top: {{ toolbar-height }}; left: 0; right:0; bottom: 0; }
 
 
-.leaf-id { position: absolute; right: 0; top: 0; background: {{ leaf-text }}; color: {{ leaf-background }};  padding: 0.2em 1em; }
+.leaf-id { position: absolute; right: 0; top: 0; background: {{ leaf-text }}; color: {{ leaf-background }};  padding: 0.2em 1em; border-radius: 0 0 0 {{ leaf-radius }};  }
+
+.leaf-id-selected { background-color: {{ leaf-selection }}; }
 """

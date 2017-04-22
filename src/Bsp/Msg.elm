@@ -17,6 +17,8 @@ type alias Id =
 type Msg msg local
     = ChildMsg Id msg
     | SharedMsg msg
+
+    -- BSP commands
     | Select Cursor
     | DeleteAt Cursor
     | SplitAt Cursor Direction local
@@ -25,7 +27,6 @@ type Msg msg local
     | SwapLR Cursor
     | Rotate Bsp.SplitView.RotateDirection Cursor
     | RotateParent Bsp.SplitView.RotateDirection Cursor
-
     | ResizeAt Ratio Cursor
 
 
@@ -38,3 +39,5 @@ type Msg msg local
 type LayoutEditingMode
     = NotEditingLayout
     | EditingLayoutBlocks
+
+
