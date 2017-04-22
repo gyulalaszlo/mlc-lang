@@ -21,6 +21,7 @@ import Bsp.Traits exposing (LocalModel)
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (class)
 
+import Qnject.Connection exposing (Connection)
 import Qnject.Qobject exposing (Address)
 import Qnject.ViewerEffects exposing (Effects)
 import Qnject.Viewers.QObjectOverview as QObjectOverview
@@ -37,9 +38,9 @@ type Model
 appView : Model
 appView = QAppView QAppView.initialModel
 
-objectView : Address -> Model
-objectView address =
-    QObjectOverview <| QObjectOverview.initialModel address
+objectView : Connection -> Address -> Model
+objectView connection address =
+    QObjectOverview <| QObjectOverview.initialModel connection address
 
 
 

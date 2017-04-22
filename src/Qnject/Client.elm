@@ -125,12 +125,13 @@ update msg model =
                 (Bsp.Msg.SplitAt
                     Bsp.Cursor.CHead
                     Bsp.SplitView.Horizontal
-                    (Qnject.Viewers.objectView address))
+                    (Qnject.Viewers.objectView (fromShared .connection model) address))
                 model
 
 --         _ -> model ! []
 
-
+fromShared : (SharedModel -> v) -> Model -> v
+fromShared fn m = Bsp.Model.getShared m.bsp |> fn
 
 updateShared: (SharedModel -> SharedModel) -> Model -> (Model, Cmd Msg)
 updateShared fn model =
@@ -220,7 +221,8 @@ css : String
 css = """
 
 
-body { font: 1em/1.2em "Fira Code", Monaco, "Courier New"; }
+body.normal { font: 1em/1.2em "Fira Code", Monaco, "Courier New"; }
+body { font: 14px/1.3em "Fira Code", Monaco, "Courier New"; }
 
 .fill-area,
 .client-toolbar-view,
@@ -235,8 +237,8 @@ body { font: 1em/1.2em "Fira Code", Monaco, "Courier New"; }
 .client-toolbar-view { bottom: auto; height: 1em; padding: 0.3em;}
 
 
-.address { display:inline-block; border-bottom: 0.1em dotted; font-style: italic; }
-.address:before { content: "@"; }
+.address { display:inline-block; border-bottom: 0.2em dotted; font-style: italic; cursor: pointer; }
+.address:hover { border-bottom-style: solid; }
 
 
 """ ++ Qnject.Viewers.css

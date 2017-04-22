@@ -13,7 +13,8 @@ module Qnject.Viewers.QObjectOverview exposing
 -}
 
 import Html exposing (Html, div, text)
-import Html.Attributes exposing (class)
+import Html.Attributes exposing (class, src)
+import Qnject.Connection exposing (Connection, url)
 import Qnject.Qobject exposing (Address)
 
 
@@ -21,13 +22,15 @@ import Qnject.Qobject exposing (Address)
 
 
 type alias Model =
-    { address: Address
+    { connection: Connection
+    , address: Address
     }
 
 
-initialModel : Address -> Model
-initialModel address =
-    { address = address
+initialModel : Connection -> Address -> Model
+initialModel connection address =
+    { connection = connection
+    , address = address
     }
 
 
@@ -83,12 +86,10 @@ css = """
 {-| screenshot view
 -}
 screenshotView : Model -> Html Msg
-screenshotView model =
-    div [ class "screenshot-view" ]
-        [ Html.img
-            [ class "screenshot"
-            , Html.Attributes.src <| "http://localhost:8000/api/qwidgets/by-address/grab/" ++ model.address
-            ]
+screenshotView {connection, address} =
+    let srcUrl = url ("/qwidgets/by-address/grab/" ++ address) connection
+    in div [ class "screenshot-view" ]
+        [ Html.img [ class "screenshot" , src srcUrl ]
             [
             ]
         ]
