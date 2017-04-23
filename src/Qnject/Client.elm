@@ -195,7 +195,10 @@ onEffects : ViewerEffect -> Model -> (Model, Cmd Msg)
 onEffects effects model =
     case effects of
         OpenObjectView address ->
-            (model, sendMsg OnOpenObjectView address)
+            (model , Cmd.batch
+                [ sendMsg OnOpenObjectView address
+                , sendMsg (ConnectionMsg << Connection.AddObject) address
+                ])
 
 
 sendMsg : (a -> Msg) -> a -> Cmd Msg

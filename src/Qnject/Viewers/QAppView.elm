@@ -16,7 +16,7 @@ import Effects exposing (Effects)
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
-import Qnject.Qobject exposing (Address, QApp, QObject)
+import Qnject.Qobject exposing (Address, QApp, QObjectSummary)
 import Qnject.Connection as Connection
 import Qnject.ViewerEffects exposing (ViewerEffect(OpenObjectView))
 
@@ -124,7 +124,7 @@ headerViewCss = """
 
 {-| generic object list widget
 -}
-objectsView : Model -> List QObject -> Html Msg
+objectsView : Model -> List QObjectSummary -> Html Msg
 objectsView model objs =
     div [ class "objects-view" ]
         [ Html.table [ class "qobject-table table" ]
@@ -152,7 +152,7 @@ objectsViewCss = """
 
 {-| qobject table row
 -}
-qobjectTableRow : Model -> QObject -> Html Msg
+qobjectTableRow : Model -> QObjectSummary -> Html Msg
 qobjectTableRow  model obj =
     Html.tr
         [ class "qobject-table-row"

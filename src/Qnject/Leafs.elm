@@ -14,13 +14,13 @@ module Qnject.Leafs exposing
 
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (class)
-import Qnject.Qobject exposing (QObject)
+import Qnject.Qobject exposing (QObjectSummary)
 
 
 -- MODEL
 
 type alias Model =
-    { objects : List QObject
+    { objects : List QObjectSummary
     }
 
 

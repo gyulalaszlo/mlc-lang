@@ -3,7 +3,7 @@ module Qnject.Qobject exposing (..)
 -}
 
 
-import Json.Decode as Decode
+import Json.Decode as Decode exposing (field, string)
 
 type alias ClassName = String
 type alias ObjectName = String
@@ -13,6 +13,47 @@ type alias Address = String
 type QObjectKind
     = KindQWidget
     | KindQObject
+
+
+stringField name = field name string
+enumField name decoder = field name string |> Decode.andThen decoder
+
+{-| Represents a QObject gotten from the internal webserver
+-}
+type alias QObjectSummary =
+    { objectName: ObjectName
+    , address: Address
+    , parentName: ObjectName
+    , objectKind: QObjectKind
+    , className: ClassName
+    , superClass: ClassName
+    }
+
+decodeQObjectKind : String -> Decode.Decoder QObjectKind
+decodeQObjectKind kindStr =
+    case kindStr of
+        "widget" -> Decode.succeed KindQWidget
+        _ -> Decode.succeed KindQObject
+
+
+decodeQObjectSummary : Decode.Decoder QObjectSummary
+decodeQObjectSummary =
+  Decode.map6 QObjectSummary
+    (stringField "objectName")
+    (stringField "address")
+    (stringField "parentName")
+    (enumField "objectKind" decodeQObjectKind)
+    (stringField "className")
+    (stringField "superClass")
+
+
+-- DETAILS ------------------------
+
+type alias Property =
+    { name: String
+    , kind: String
+    , value: String
+    }
 
 
 type QAccessKind
@@ -27,6 +68,12 @@ type QMethodKind
     | Signal
     | Slot
 
+decodeAccess str =
+    case str of
+        "public" -> Decode.succeed PublicAccess
+        "private" -> Decode.succeed PrivateAccess
+        "protected" -> Decode.succeed ProtectedAccess
+        _ -> Decode.fail <| "Unknown access type: " ++ str
 
 type alias ObjectMethod =
     { name : String
@@ -36,50 +83,52 @@ type alias ObjectMethod =
     }
 
 
-{-| Represents a QObject gotten from the internal webserver
--}
-type alias QObject =
-    { objectName: ObjectName
-    , address: Address
-    , parentName: ObjectName
-    , objectKind: QObjectKind
-    , className: ClassName
-    , superClass: ClassName
---    , methods: List ObjectMethod
+type alias QObjectDetails =
+    { methods: List ObjectMethod
+    , properties: List (Property)
+    , summary: QObjectSummary
     }
 
-decodeQObjectKind : String -> Decode.Decoder QObjectKind
-decodeQObjectKind kindStr =
-    case kindStr of
-        "widget" -> Decode.succeed KindQWidget
-        _ -> Decode.succeed KindQObject
+decodeMethod : Decode.Decoder ObjectMethod
+decodeMethod =
+    Decode.map4 ObjectMethod
+        (field "name" string)
+        (field "type" string)
+        (field "access" string
+            |> Decode.andThen decodeAccess)
+        (field "signature" string)
 
 
-decodeQobject : Decode.Decoder QObject
-decodeQobject =
-  Decode.map6 QObject
-    (Decode.field "objectName" Decode.string)
-    (Decode.field "address" Decode.string)
-    (Decode.field "parentName" Decode.string)
+decodeProperty : Decode.Decoder Property
+decodeProperty =
+    Decode.map3 Property
+        (field "name" string)
+        (field "type" string)
+        (field "value" string)
 
-    (Decode.field "objectKind" Decode.string
-        |> Decode.andThen decodeQObjectKind)
-
-    (Decode.field "className" Decode.string)
-    (Decode.field "superClass" Decode.string)
-
-
-
+decodeQObjectDetails : Decode.Decoder QObjectDetails
+decodeQObjectDetails =
+    Decode.map3 QObjectDetails
+        (field "methods" <| Decode.list decodeMethod)
+        (field "properties" <| Decode.list decodeProperty)
+        (field "meta" decodeQObjectSummary)
 
 
--- App
 
+-- QOBJECT ------------------------
+
+type alias QObject =
+    {
+
+    }
+
+-- QAPP ------------------------
 
 
 type alias QApp =
     { appName: String
     , address: Address
-    , widgets: List QObject
+    , widgets: List QObjectSummary
     }
 
 
@@ -90,4 +139,4 @@ decodeQApp =
 --    Decode.map2 (\a b -> QApp (Debug.log "A=" a) (Debug.log "B=" b))
         (Decode.field "appName" Decode.string)
         (Decode.field "qApp" Decode.string)
-        (Decode.field "widgets" (Decode.list decodeQobject))
+        (Decode.field "widgets" (Decode.list decodeQObjectSummary))
