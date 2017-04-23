@@ -20,13 +20,16 @@ import Bsp.Msg
 import Bsp.Root
 import Bsp.SplitView
 import Bsp.Traits
+import Colors.Monokai
+import Css
+import Effects exposing (Effects)
 import Error exposing (Error)
 import Html exposing (Html, div, span, text)
 import Html.Events exposing (onClick)
 import Http
 import Html.Attributes exposing (class)
-import Qnject.Connection as Connection exposing (Connection)
-import Qnject.ViewerEffects exposing (Effects(OpenObjectView))
+import Qnject.Connection as Connection
+import Qnject.ViewerEffects exposing (ViewerEffect(OpenObjectView))
 import Qnject.Viewers exposing (bspTraits)
 import Qnject.Viewers.QAppView
 import Qnject.Qobject exposing (..)
@@ -39,7 +42,7 @@ import Task
 -- MODEL
 
 type alias SharedModel =
-    { connection: Connection
+    { connection: Connection.Model
     , app: Maybe QApp
     , requestError: Maybe Http.Error
 
@@ -76,17 +79,17 @@ initialModel =
 
 type alias BspViewMsg = Bsp.Msg.Msg Qnject.Viewers.Msg Qnject.Viewers.Model
 type alias BspLocalModel = Bsp.Traits.LocalModel Qnject.Viewers.Msg Qnject.Viewers.Model SharedModel
-type alias BspModel = Bsp.Model.Model Qnject.Viewers.Msg Qnject.Viewers.Model SharedModel Effects
+type alias BspModel = Bsp.Model.Model Qnject.Viewers.Msg Qnject.Viewers.Model SharedModel ViewerEffect
 
 type Msg
     = Refresh
+    | ConnectionMsg Connection.Msg
 
     | OnGetObjectList (Result Http.Error QApp)
     | OnOpenObjectView Address
 
     | WrappedBspMsg BspViewMsg
 
---    | ChildrenMsg ChildMsg
 
 
 
@@ -109,23 +112,27 @@ subscriptions { bsp } =
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
-    case msg of
+    let sharedUpdate fn = updateSharedModel fn model
+    in case msg of
          WrappedBspMsg m -> updateBspRoot m model
+         ConnectionMsg m -> updateShared (updateConnection m) model
 
-         Refresh -> (model, Http.send OnGetObjectList (getQobjects model.bsp.shared.connection))
+         Refresh ->
+            updateShared (updateConnection Connection.ReloadAll) model
+
 
          OnGetObjectList (Err err) ->
-            updateShared (\s -> { s | requestError =  Just err, app = Nothing }) model
+            sharedUpdate (\s -> { s | requestError =  Just err, app = Nothing })
 
          OnGetObjectList (Ok oo) ->
-            updateShared (\s -> { s | app = Just oo }) model
+            sharedUpdate (\s -> { s | app = Just oo })
 
          OnOpenObjectView address ->
             updateBspRoot
                 (Bsp.Msg.SplitAt
                     Bsp.Cursor.CHead
                     Bsp.SplitView.Horizontal
-                    (Qnject.Viewers.objectView (fromShared .connection model) address))
+                    (Qnject.Viewers.objectView address))
                 model
 
 --         _ -> model ! []
@@ -133,16 +140,21 @@ update msg model =
 fromShared : (SharedModel -> v) -> Model -> v
 fromShared fn m = Bsp.Model.getShared m.bsp |> fn
 
-updateShared: (SharedModel -> SharedModel) -> Model -> (Model, Cmd Msg)
-updateShared fn model =
+updateSharedModel: (SharedModel -> SharedModel) -> Model -> (Model, Cmd Msg)
+updateSharedModel fn model =
     let newBsp = Bsp.Model.mapShared fn model.bsp
     in ( { model | bsp = newBsp} , Cmd.none )
 
+updateShared: (SharedModel -> (SharedModel, Cmd Msg)) -> Model -> (Model, Cmd Msg)
+updateShared fn model =
+    let bsp = model.bsp
+        (newShared, cc) = fn bsp.shared
+    in ({ model | bsp = { bsp | shared = newShared }}, cc)
 
 
 onRequestError : Http.Error -> Model -> (Model, Cmd Msg)
 onRequestError err model =
-    updateShared (\s -> { s | requestError = Just err }) model
+    updateSharedModel (\s -> { s | requestError = Just err }) model
 
 
 {-| Updates sub component: Bsp.Root
@@ -151,18 +163,47 @@ updateBspRoot : BspViewMsg -> Model -> (Model, Cmd Msg)
 updateBspRoot m model =
     let
         (sm, sc, se) = Bsp.Root.update m model.bsp
+        init = ({model | bsp = sm}, Cmd.map WrappedBspMsg sc, se)
     in
-        ({ model | bsp = sm }
-        , Cmd.batch
-            [ Cmd.map WrappedBspMsg sc
-            , case se of
-                Nothing -> Cmd.none
-                Just (OpenObjectView addr) ->
-                    Task.perform OnOpenObjectView <| Task.succeed addr
-            ]
-        )
+        Effects.foldFinal onEffects init
+--        updateFromEffects { model | bsp = sm } se
 
 
+
+
+{-| Updates sub component: Connection
+-}
+updateConnection : Connection.Msg -> SharedModel -> (SharedModel, Cmd Msg)
+updateConnection m model =
+    let
+        (sm, sc) = Connection.update m model.connection
+    in
+        ({ model | connection = sm }, Cmd.map ConnectionMsg sc)
+
+
+
+
+-- EFFECTS ---------------------------------------------------------------------
+
+--updateFromEffects : Model -> Effects ViewerEffect -> (Model, Cmd Msg)
+--updateFromEffects model effects =
+--    effects
+--        |> Effects.fold (onEffects model)
+--        |> Maybe.withDefault (model, Cmd.none)
+
+onEffects : ViewerEffect -> Model -> (Model, Cmd Msg)
+onEffects effects model =
+    case effects of
+        OpenObjectView address ->
+            (model, sendMsg OnOpenObjectView address)
+
+
+sendMsg : (a -> Msg) -> a -> Cmd Msg
+sendMsg msg a =
+    Task.perform msg <| Task.succeed a
+
+
+-- VIEW ------------------------------------------------------------------------
 
 {-| Updates sub component: Bsp.Root
 -}
@@ -178,10 +219,6 @@ view model =
 
 
 
-
-getQobjects : Connection -> Http.Request QApp
-getQobjects connection =
-    Http.get (Connection.url "/qwidgets" connection) decodeQApp
 
 
 -- VIEW
@@ -218,11 +255,46 @@ toolbarViewCss = """
 -- CSS
 
 css : String
-css = """
+css =
+    let themeColor cfn = (Css.color << cfn) Colors.Monokai.theme
+    in Css.css
+        [ ( "background-color", themeColor .background )
+        , ( "text-color", themeColor .text )
+        , ( "leaf-selection", themeColor .selection )
+        , ( "split-background", "black" )
+        , ( "leaf-radius", "5px" )
+        , ( "leaf-margin", "0.1em" )
 
+        , ( "color-darkbg", Css.color <| Colors.Monokai.darkBlack)
 
-body.normal { font: 1em/1.2em "Fira Code", Monaco, "Courier New"; }
-body { font: 14px/1.3em "Fira Code", Monaco, "Courier New"; }
+        -- layout-editing
+        , ( "layout-border-size", "0.2em" )
+        , ( "layout-margin", "0.3em" )
+        , ( "layout-editing-margin", "0.3em" )
+
+        , ( "layout-editing-split-border-style", "0.1em dotted" )
+        -- toolbar data
+        , ( "toolbar-margin", "0.3em" )
+        , ( "toolbar-height", "1.6em" )
+
+        , ( "font-size", "13px")
+        , ( "line-height", "17px")
+
+        , ("button-color", themeColor .selection )
+        , ("button-background", "none")
+        , ("button-border-color", themeColor .background )
+        , ("button-hover-color", themeColor .background )
+        , ("button-hover-background-color", themeColor .selection )
+        , ("button-border-radius", "0.4em")
+
+        , ("normal-font", "Trebuchet MS")
+        , ("fixed-font", "\"Fira Code\", Monaco, \"Courier New\"")
+        ]
+        """
+
+body { font: {{ font-size }}/{{ line-height }} {{ normal-font }}; }
+
+code, pre { font-family: {{ fixed-font }}; }
 
 .fill-area,
 .client-toolbar-view,
@@ -231,15 +303,17 @@ body { font: 14px/1.3em "Fira Code", Monaco, "Courier New"; }
 
 
 .toolbar-offset-top,
-.bsp-root-view { top: 1.6em; }
+.bsp-root-view { top: {{ toolbar-height }}; }
 
 .toolbar-top,
-.client-toolbar-view { bottom: auto; height: 1em; padding: 0.3em;}
+.client-toolbar-view { bottom: auto; height: {{ toolbar-height }}; }
 
 
 .address { display:inline-block; border-bottom: 0.2em dotted; font-style: italic; cursor: pointer; }
 .address:hover { border-bottom-style: solid; }
 
+button { border: 0.2em solid {{ button-border-color }}; background: {{ button-background }}; color: {{ button-color }}; border-radius: {{ button-border-radius }}; outline: none; cursor: pointer; }
+button:hover { background: {{ button-hover-background-color }}; color: {{ button-hover-color }}; }
 
 """ ++ Qnject.Viewers.css
 

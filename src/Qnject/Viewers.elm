@@ -18,12 +18,13 @@ module Qnject.Viewers exposing
 import Bsp.DefaultTheme
 import Bsp.Msg
 import Bsp.Traits exposing (LocalModel)
+import Effects exposing (Effects)
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (class)
 
-import Qnject.Connection exposing (Connection)
+import Qnject.Connection as Connection
 import Qnject.Qobject exposing (Address)
-import Qnject.ViewerEffects exposing (Effects)
+import Qnject.ViewerEffects exposing (ViewerEffect)
 import Qnject.Viewers.QObjectOverview as QObjectOverview
 import Qnject.Viewers.QAppView as QAppView
 
@@ -38,16 +39,16 @@ type Model
 appView : Model
 appView = QAppView QAppView.initialModel
 
-objectView : Connection -> Address -> Model
-objectView connection address =
-    QObjectOverview <| QObjectOverview.initialModel connection address
+objectView : Address -> Model
+objectView address =
+    QObjectOverview <| QObjectOverview.initialModel address
 
 
 
 labelFor : Model -> String
 labelFor model =
     case model of
-        QAppView _ -> "App"
+        QAppView _ -> "QApplication"
         QObjectOverview m -> "QObject: " ++ m.address
 
 initialModels : List Model
@@ -56,9 +57,6 @@ initialModels =
     ]
 
 
---type alias BspViewMsg = Bsp.Msg.Msg Msg Model
---type alias BspLocalModel = LocalModel Msg Model SharedModel
---type alias BspModel = Bsp.Model.Model Msg Model SharedModel Effects
 bspTraits =
     { subscriptions = subscriptions
     , update = update
@@ -70,6 +68,8 @@ bspTraits =
             (\model -> initialModels)
     }
 
+type alias Local s = LocalModel Msg Model s -> Html Msg
+type alias BspViewMsg = Bsp.Msg.Msg Msg Model
 
 -- MSG
 
@@ -93,7 +93,7 @@ subscriptions model =
 
 
 --update : Msg -> Model -> (Model, Cmd Msg)
-update : Msg -> LocalModel Msg Model s -> (Model, Cmd (Bsp.Msg.Msg Msg Model), Maybe Effects)
+update : Msg -> LocalModel Msg Model s -> (Model, Cmd (Bsp.Msg.Msg Msg Model), Effects ViewerEffect)
 update msg model =
     let {local,shared} = model
     in case (msg, local) of
@@ -103,31 +103,18 @@ update msg model =
 
         (QnjectQObjectOverviewMsg msg, QObjectOverview m) ->
              let (cm, cc) = QObjectOverview.update msg m
-             in (QObjectOverview cm, Cmd.map (model.msg << QnjectQObjectOverviewMsg) cc, Nothing)
+             in (QObjectOverview cm, Cmd.map (model.msg << QnjectQObjectOverviewMsg) cc, Effects.none)
 
-        _ -> (local, Cmd.none, Nothing)
+        _ -> (local, Cmd.none, Effects.none)
 
 
 -- VIEW
 
 
---view : Model -> Html Msg
-view {local, shared, cursor, msg} =
-    let orNoApp = Maybe.withDefault (text "No app")
-        inner app =
-            case local of
-                QAppView m ->
-                    QAppView.view { app = app, model = m}
-                        |> Html.map QnjectQAppViewMsg
-
-                QObjectOverview m ->
-                    QObjectOverview.view m
-                        |> Html.map QnjectQObjectOverviewMsg
-    in
-
+view : LocalModel Msg Model { a | connection: Connection.Model } -> Html BspViewMsg
+view model =
     Html.div []
-        [ Html.h4 [] [ text <| labelFor local]
-        , shared.app |> Maybe.map inner |> orNoApp |> Html.map msg
+        [ Html.map model.msg <| localView model
         ]
 
 
@@ -139,3 +126,31 @@ css = """
 .Viewers-view {}
 """ ++ QObjectOverview.css
     ++ QAppView.css
+
+
+
+-- VIEW: localView
+
+
+
+{-| local view
+-}
+localView : LocalModel Msg Model {a | connection: Connection.Model } -> Html Msg
+localView {local, shared, cursor, msg} =
+        case local of
+            QAppView m ->
+                QAppView.view { connection = shared.connection, model = m}
+                    |> Html.map QnjectQAppViewMsg
+
+            QObjectOverview m ->
+                QObjectOverview.view { model = m, connection = shared.connection }
+                    |> Html.map QnjectQObjectOverviewMsg
+
+{-| CSS parts for localView
+-}
+localViewCss : String
+localViewCss = """
+.local-view {  }
+"""
+
+

@@ -4,6 +4,6 @@ module Qnject.ViewerEffects exposing (..)
 
 import Qnject.Qobject exposing (Address)
 
-type Effects
+type ViewerEffect
     = OpenObjectView Address
 

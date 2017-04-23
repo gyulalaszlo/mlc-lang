@@ -12,11 +12,13 @@ module Qnject.Viewers.QAppView exposing
 {-| Describe me please...
 -}
 
+import Effects exposing (Effects)
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import Qnject.Qobject exposing (Address, QApp, QObject)
-import Qnject.ViewerEffects exposing (Effects(OpenObjectView))
+import Qnject.Connection as Connection
+import Qnject.ViewerEffects exposing (ViewerEffect(OpenObjectView))
 
 
 
@@ -36,10 +38,10 @@ initialModel =
 
 type alias Context =
     { model: Model
-    , app: QApp
+    , connection: Connection.Model
     }
 
-contextFrom : Model -> QApp -> Context
+contextFrom : Model -> Connection.Model -> Context
 contextFrom = Context
 
 
@@ -63,21 +65,24 @@ subscriptions model =
 -- UPDATE
 
 
-update : Msg -> Model -> (Model, Cmd Msg, Maybe Effects)
+update : Msg -> Model -> (Model, Cmd Msg, Effects ViewerEffect)
 update msg model =
     case msg of
-        OpenAddress addr -> (model, Cmd.none, Just <| OpenObjectView addr)
+        OpenAddress addr -> (model, Cmd.none, Effects.from <| OpenObjectView addr)
 
 
 -- VIEW
 
 
 view : Context -> Html Msg
-view ctx =
-    div [ class "QAppView-view" ]
-        [ headerView ctx
-        , objectsView ctx.model ctx.app.widgets
-        ]
+view {model, connection} =
+    case connection.app of
+        Nothing -> text "No app"
+        Just app ->
+            div [ class "QAppView-view" ]
+                [ headerView model app
+                , objectsView model app.widgets
+                ]
 
 
 
@@ -87,10 +92,9 @@ view ctx =
 
 {-| header view
 -}
-headerView : Context -> Html Msg
-headerView ctx =
-    let { model, app } = ctx
-    in div [ class "header-view" ]
+headerView : Model -> QApp -> Html Msg
+headerView model app =
+    div [ class "header-view" ]
         [ span [ class "app-name" ] [ text app.appName ]
         , text " "
         , span [ class "address" ] [ text app.address ]
@@ -137,6 +141,7 @@ objectsView model objs =
 objectsViewCss : String
 objectsViewCss = """
 .objects-view {  }
+.qobject-table { width:100%;  }
 """
 
 
@@ -153,10 +158,10 @@ qobjectTableRow  model obj =
         [ class "qobject-table-row"
         , class <| "qobject-kind-" ++ toString obj.objectKind
         ]
-        [ Html.td [ class "object-name" ] [ text obj.objectName ]
+        [ Html.td [ class "address", onClick <| OpenAddress obj.address ] [ text obj.address ]
+        , Html.td [ class "object-name" ] [ text obj.objectName ]
         , Html.td [ class "class-name"] [ text obj.className ]
         , Html.td [ class "super-class" ] [ text obj.superClass ]
-        , Html.td [ class "address", onClick <| OpenAddress obj.address ] [ text obj.address ]
         ]
 
 {-| CSS parts for qobjectTableRow
